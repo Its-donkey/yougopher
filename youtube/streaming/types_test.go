@@ -192,7 +192,6 @@ func TestLiveChatMessage_Clone(t *testing.T) {
 		}
 
 		clone := original.Clone()
-
 		if clone == original {
 			t.Error("Clone() returned same pointer")
 		}

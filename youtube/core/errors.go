@@ -39,7 +39,22 @@ func (e *APIError) Error() string {
 
 // IsQuotaExceeded returns true if this error indicates quota exhaustion.
 func (e *APIError) IsQuotaExceeded() bool {
-	return e.Code == "quotaExceeded"
+	switch e.Code {
+	case "quotaExceeded", "dailyLimitExceeded", "userRateLimitExceeded":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsRateLimited returns true if this error indicates rate limiting.
+func (e *APIError) IsRateLimited() bool {
+	switch e.Code {
+	case "rateLimitExceeded", "userRateLimitExceeded":
+		return true
+	default:
+		return e.StatusCode == 429
+	}
 }
 
 // IsNotFound returns true if this error indicates a resource was not found.
@@ -68,9 +83,14 @@ func (e *QuotaError) Error() string {
 // RateLimitError indicates a per-second rate limit was exceeded.
 type RateLimitError struct {
 	RetryAfter time.Duration
+	Code       string // Original error code (e.g., "rateLimitExceeded")
+	Message    string // Original error message
 }
 
 func (e *RateLimitError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("youtube api: rate limited (%s): %s, retry after %s", e.Code, e.Message, e.RetryAfter)
+	}
 	return fmt.Sprintf("youtube api: rate limited, retry after %s", e.RetryAfter)
 }
 

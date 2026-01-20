@@ -2,6 +2,7 @@ package streaming
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ type ChatMessage struct {
 	Author *Author
 
 	// PublishedAt is when the message was sent.
+	// May be zero if the API doesn't provide a publish time.
 	PublishedAt time.Time
 
 	// Raw is the underlying LiveChatMessage if needed.
@@ -172,6 +174,27 @@ type GiftMembershipEvent struct {
 	Raw *LiveChatMessage
 }
 
+// GiftMembershipReceivedEvent represents a received gifted membership.
+type GiftMembershipReceivedEvent struct {
+	// ID is the unique event identifier.
+	ID string
+
+	// Author is the user who received the gifted membership.
+	Author *Author
+
+	// LevelName is the membership level received.
+	LevelName string
+
+	// GifterChannelID is the channel ID of the gifter.
+	GifterChannelID string
+
+	// AssociatedGiftingMessageID links to the gifting event.
+	AssociatedGiftingMessageID string
+
+	// Raw is the underlying LiveChatMessage.
+	Raw *LiveChatMessage
+}
+
 // BanEvent represents a user ban in chat.
 type BanEvent struct {
 	// BannedUser contains information about the banned user.
@@ -189,17 +212,20 @@ type BanEvent struct {
 
 // Handler wrapper types for pointer identity.
 type (
-	chatMessageHandler      struct{ fn func(*ChatMessage) }
-	superChatHandler        struct{ fn func(*SuperChatEvent) }
-	superStickerHandler     struct{ fn func(*SuperStickerEvent) }
-	membershipHandler       struct{ fn func(*MembershipEvent) }
-	memberMilestoneHandler  struct{ fn func(*MemberMilestoneEvent) }
-	giftMembershipHandler   struct{ fn func(*GiftMembershipEvent) }
-	messageDeletedHandler   struct{ fn func(string) }
-	userBannedHandler       struct{ fn func(*BanEvent) }
-	chatConnectHandler      struct{ fn func() }
-	chatDisconnectHandler   struct{ fn func() }
-	chatErrorHandler        struct{ fn func(error) }
+	chatMessageHandler            struct{ fn func(*ChatMessage) }
+	superChatHandler              struct{ fn func(*SuperChatEvent) }
+	superStickerHandler           struct{ fn func(*SuperStickerEvent) }
+	membershipHandler             struct{ fn func(*MembershipEvent) }
+	memberMilestoneHandler        struct{ fn func(*MemberMilestoneEvent) }
+	giftMembershipHandler         struct{ fn func(*GiftMembershipEvent) }
+	giftMembershipReceivedHandler struct {
+		fn func(*GiftMembershipReceivedEvent)
+	}
+	messageDeletedHandler struct{ fn func(string) }
+	userBannedHandler     struct{ fn func(*BanEvent) }
+	chatConnectHandler    struct{ fn func() }
+	chatDisconnectHandler struct{ fn func() }
+	chatErrorHandler      struct{ fn func(error) }
 )
 
 // ChatBotClient is a high-level client for building YouTube chat bots.
@@ -210,45 +236,67 @@ type ChatBotClient struct {
 	liveChatID    string
 
 	// Composable event handlers
-	mu                      sync.RWMutex
-	messageHandlers         []*chatMessageHandler
-	superChatHandlers       []*superChatHandler
-	superStickerHandlers    []*superStickerHandler
-	membershipHandlers      []*membershipHandler
-	memberMilestoneHandlers []*memberMilestoneHandler
-	giftMembershipHandlers  []*giftMembershipHandler
-	messageDeletedHandlers  []*messageDeletedHandler
-	userBannedHandlers      []*userBannedHandler
-	connectHandlers         []*chatConnectHandler
-	disconnectHandlers      []*chatDisconnectHandler
-	errorHandlers           []*chatErrorHandler
+	mu                             sync.RWMutex
+	messageHandlers                []*chatMessageHandler
+	superChatHandlers              []*superChatHandler
+	superStickerHandlers           []*superStickerHandler
+	membershipHandlers             []*membershipHandler
+	memberMilestoneHandlers        []*memberMilestoneHandler
+	giftMembershipHandlers         []*giftMembershipHandler
+	giftMembershipReceivedHandlers []*giftMembershipReceivedHandler
+	messageDeletedHandlers         []*messageDeletedHandler
+	userBannedHandlers             []*userBannedHandler
+	connectHandlers                []*chatConnectHandler
+	disconnectHandlers             []*chatDisconnectHandler
+	errorHandlers                  []*chatErrorHandler
 
 	// Internal state
-	pollerUnsub func() // Unsubscribe from poller events
+	pollerUnsub      func()        // Unsubscribe from poller events
+	tokenRefreshStop chan struct{} // Signal to stop token refresh loop
+	tokenRefreshDone chan struct{} // Token refresh loop completed
+	refreshInterval  time.Duration // How often to refresh token (default 45 minutes)
 }
 
 // ChatBotOption configures a ChatBotClient.
 type ChatBotOption func(*ChatBotClient)
 
+// DefaultTokenRefreshInterval is the default interval for refreshing the access token.
+const DefaultTokenRefreshInterval = 45 * time.Minute
+
 // NewChatBotClient creates a new high-level chat bot client.
 // The tokenProvider can be nil if the client already has an access token set.
-func NewChatBotClient(client *core.Client, tokenProvider TokenProvider, liveChatID string, opts ...ChatBotOption) *ChatBotClient {
+// Returns an error if client is nil or liveChatID is empty.
+func NewChatBotClient(client *core.Client, tokenProvider TokenProvider, liveChatID string, opts ...ChatBotOption) (*ChatBotClient, error) {
+	if client == nil {
+		return nil, fmt.Errorf("client cannot be nil")
+	}
+	if liveChatID == "" {
+		return nil, fmt.Errorf("liveChatID cannot be empty")
+	}
+
 	c := &ChatBotClient{
-		client:        client,
-		tokenProvider: tokenProvider,
-		liveChatID:    liveChatID,
+		client:          client,
+		tokenProvider:   tokenProvider,
+		liveChatID:      liveChatID,
+		refreshInterval: DefaultTokenRefreshInterval,
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	return c
+	return c, nil
 }
 
 // WithPoller sets a custom LiveChatPoller (useful for testing).
 func WithPoller(poller *LiveChatPoller) ChatBotOption {
 	return func(c *ChatBotClient) { c.poller = poller }
+}
+
+// WithTokenRefreshInterval sets the interval for refreshing the access token.
+// Default is 45 minutes. Set to 0 to disable auto-refresh.
+func WithTokenRefreshInterval(d time.Duration) ChatBotOption {
+	return func(c *ChatBotClient) { c.refreshInterval = d }
 }
 
 // Connect starts the chat bot and begins listening for messages.
@@ -267,8 +315,24 @@ func (c *ChatBotClient) Connect(ctx context.Context) error {
 		c.poller = NewLiveChatPoller(c.client, c.liveChatID)
 	}
 
+	// Clean up any existing subscription to prevent handler duplication
+	if c.pollerUnsub != nil {
+		c.pollerUnsub()
+		c.pollerUnsub = nil
+	}
+
+	// Stop any existing token refresh loop
+	c.stopTokenRefresh()
+
 	// Subscribe to poller events
 	c.subscribeToPoller()
+
+	// Start token refresh loop if we have a token provider and refresh interval
+	if c.tokenProvider != nil && c.refreshInterval > 0 {
+		c.tokenRefreshStop = make(chan struct{})
+		c.tokenRefreshDone = make(chan struct{})
+		go c.tokenRefreshLoop(ctx)
+	}
 
 	// Start polling
 	return c.poller.Start(ctx)
@@ -276,7 +340,10 @@ func (c *ChatBotClient) Connect(ctx context.Context) error {
 
 // Close stops the chat bot.
 func (c *ChatBotClient) Close() error {
-	// Stop poller first (this will trigger disconnect handlers)
+	// Stop token refresh loop first
+	c.stopTokenRefresh()
+
+	// Stop poller (this will trigger disconnect handlers)
 	if c.poller != nil {
 		c.poller.Stop()
 	}
@@ -286,6 +353,40 @@ func (c *ChatBotClient) Close() error {
 		c.pollerUnsub = nil
 	}
 	return nil
+}
+
+// stopTokenRefresh stops the token refresh loop if running.
+func (c *ChatBotClient) stopTokenRefresh() {
+	if c.tokenRefreshStop != nil {
+		close(c.tokenRefreshStop)
+		<-c.tokenRefreshDone
+		c.tokenRefreshStop = nil
+		c.tokenRefreshDone = nil
+	}
+}
+
+// tokenRefreshLoop periodically refreshes the access token.
+func (c *ChatBotClient) tokenRefreshLoop(ctx context.Context) {
+	defer close(c.tokenRefreshDone)
+
+	ticker := time.NewTicker(c.refreshInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.tokenRefreshStop:
+			return
+		case <-ticker.C:
+			token, err := c.tokenProvider.AccessToken(ctx)
+			if err != nil {
+				c.dispatchError(fmt.Errorf("token refresh failed: %w", err))
+				continue
+			}
+			c.client.SetAccessToken(token)
+		}
+	}
 }
 
 // IsConnected returns true if the bot is currently connected.
@@ -354,12 +455,14 @@ func (c *ChatBotClient) handleMessage(msg *LiveChatMessage) {
 		c.dispatchMemberMilestone(msg)
 	case MessageTypeMembershipGifting:
 		c.dispatchGiftMembership(msg)
+	case MessageTypeGiftMembershipReceived:
+		c.dispatchGiftMembershipReceived(msg)
 	}
 }
 
 // Say sends a message to the chat.
 func (c *ChatBotClient) Say(ctx context.Context, message string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	_, err := c.poller.SendMessage(ctx, message)
@@ -368,7 +471,7 @@ func (c *ChatBotClient) Say(ctx context.Context, message string) error {
 
 // Delete deletes a message from the chat.
 func (c *ChatBotClient) Delete(ctx context.Context, messageID string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	return c.poller.DeleteMessage(ctx, messageID)
@@ -376,7 +479,7 @@ func (c *ChatBotClient) Delete(ctx context.Context, messageID string) error {
 
 // Ban permanently bans a user from the chat.
 func (c *ChatBotClient) Ban(ctx context.Context, channelID string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	_, err := c.poller.BanUser(ctx, channelID)
@@ -385,8 +488,11 @@ func (c *ChatBotClient) Ban(ctx context.Context, channelID string) error {
 
 // Timeout temporarily bans a user from the chat.
 func (c *ChatBotClient) Timeout(ctx context.Context, channelID string, seconds int) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
+	}
+	if seconds <= 0 {
+		return fmt.Errorf("timeout duration must be positive")
 	}
 	_, err := c.poller.TimeoutUser(ctx, channelID, int64(seconds))
 	return err
@@ -394,7 +500,7 @@ func (c *ChatBotClient) Timeout(ctx context.Context, channelID string, seconds i
 
 // Unban removes a ban from the chat.
 func (c *ChatBotClient) Unban(ctx context.Context, banID string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	return c.poller.UnbanUser(ctx, banID)
@@ -402,7 +508,7 @@ func (c *ChatBotClient) Unban(ctx context.Context, banID string) error {
 
 // AddModerator adds a moderator to the chat.
 func (c *ChatBotClient) AddModerator(ctx context.Context, channelID string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	_, err := c.poller.AddModerator(ctx, channelID)
@@ -411,7 +517,7 @@ func (c *ChatBotClient) AddModerator(ctx context.Context, channelID string) erro
 
 // RemoveModerator removes a moderator from the chat.
 func (c *ChatBotClient) RemoveModerator(ctx context.Context, moderatorID string) error {
-	if c.poller == nil {
+	if !c.IsConnected() {
 		return ErrNotRunning
 	}
 	return c.poller.RemoveModerator(ctx, moderatorID)
@@ -555,6 +661,29 @@ func (c *ChatBotClient) OnGiftMembership(fn func(*GiftMembershipEvent)) func() {
 	}
 }
 
+// OnGiftMembershipReceived registers a handler for received gift membership events.
+func (c *ChatBotClient) OnGiftMembershipReceived(fn func(*GiftMembershipReceivedEvent)) func() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	h := &giftMembershipReceivedHandler{fn: fn}
+	c.giftMembershipReceivedHandlers = append(c.giftMembershipReceivedHandlers, h)
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			for i, handler := range c.giftMembershipReceivedHandlers {
+				if handler == h {
+					c.giftMembershipReceivedHandlers = slices.Delete(c.giftMembershipReceivedHandlers, i, i+1)
+					return
+				}
+			}
+		})
+	}
+}
+
 // OnMessageDeleted registers a handler for message deletion events.
 func (c *ChatBotClient) OnMessageDeleted(fn func(string)) func() {
 	c.mu.Lock()
@@ -687,11 +816,15 @@ func (c *ChatBotClient) dispatchChatMessage(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(chatMsg)
+		c.safeCall(func() { h.fn(chatMsg) })
 	}
 }
 
 func (c *ChatBotClient) dispatchSuperChat(msg *LiveChatMessage) {
+	if msg.Snippet.SuperChatDetails == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*superChatHandler, len(c.superChatHandlers))
 	copy(handlers, c.superChatHandlers)
@@ -710,11 +843,15 @@ func (c *ChatBotClient) dispatchSuperChat(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
 func (c *ChatBotClient) dispatchSuperSticker(msg *LiveChatMessage) {
+	if msg.Snippet.SuperStickerDetails == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*superStickerHandler, len(c.superStickerHandlers))
 	copy(handlers, c.superStickerHandlers)
@@ -737,11 +874,15 @@ func (c *ChatBotClient) dispatchSuperSticker(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
 func (c *ChatBotClient) dispatchMembership(msg *LiveChatMessage) {
+	if msg.Snippet.NewSponsorDetails == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*membershipHandler, len(c.membershipHandlers))
 	copy(handlers, c.membershipHandlers)
@@ -757,11 +898,15 @@ func (c *ChatBotClient) dispatchMembership(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
 func (c *ChatBotClient) dispatchMemberMilestone(msg *LiveChatMessage) {
+	if msg.Snippet.MemberMilestoneChatDetails == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*memberMilestoneHandler, len(c.memberMilestoneHandlers))
 	copy(handlers, c.memberMilestoneHandlers)
@@ -778,11 +923,15 @@ func (c *ChatBotClient) dispatchMemberMilestone(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
 func (c *ChatBotClient) dispatchGiftMembership(msg *LiveChatMessage) {
+	if msg.Snippet.MembershipGiftingDetails == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*giftMembershipHandler, len(c.giftMembershipHandlers))
 	copy(handlers, c.giftMembershipHandlers)
@@ -798,7 +947,32 @@ func (c *ChatBotClient) dispatchGiftMembership(msg *LiveChatMessage) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
+	}
+}
+
+func (c *ChatBotClient) dispatchGiftMembershipReceived(msg *LiveChatMessage) {
+	if msg.Snippet.GiftMembershipReceivedDetails == nil {
+		return
+	}
+
+	c.mu.RLock()
+	handlers := make([]*giftMembershipReceivedHandler, len(c.giftMembershipReceivedHandlers))
+	copy(handlers, c.giftMembershipReceivedHandlers)
+	c.mu.RUnlock()
+
+	gr := msg.Snippet.GiftMembershipReceivedDetails
+	event := &GiftMembershipReceivedEvent{
+		ID:                         msg.ID,
+		Author:                     parseAuthor(msg.AuthorDetails),
+		LevelName:                  gr.MemberLevelName,
+		GifterChannelID:            gr.GifterChannelID,
+		AssociatedGiftingMessageID: gr.AssociatedMembershipGiftingMessageID,
+		Raw:                        msg,
+	}
+
+	for _, h := range handlers {
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
@@ -809,11 +983,15 @@ func (c *ChatBotClient) dispatchMessageDeleted(id string) {
 	c.mu.RUnlock()
 
 	for _, h := range handlers {
-		h.fn(id)
+		c.safeCall(func() { h.fn(id) })
 	}
 }
 
 func (c *ChatBotClient) dispatchUserBanned(details *UserBannedDetails) {
+	if details == nil {
+		return
+	}
+
 	c.mu.RLock()
 	handlers := make([]*userBannedHandler, len(c.userBannedHandlers))
 	copy(handlers, c.userBannedHandlers)
@@ -834,7 +1012,7 @@ func (c *ChatBotClient) dispatchUserBanned(details *UserBannedDetails) {
 	}
 
 	for _, h := range handlers {
-		h.fn(event)
+		c.safeCall(func() { h.fn(event) })
 	}
 }
 
@@ -845,7 +1023,7 @@ func (c *ChatBotClient) dispatchConnect() {
 	c.mu.RUnlock()
 
 	for _, h := range handlers {
-		h.fn()
+		c.safeCall(func() { h.fn() })
 	}
 }
 
@@ -856,7 +1034,7 @@ func (c *ChatBotClient) dispatchDisconnect() {
 	c.mu.RUnlock()
 
 	for _, h := range handlers {
-		h.fn()
+		c.safeCall(func() { h.fn() })
 	}
 }
 
@@ -867,8 +1045,21 @@ func (c *ChatBotClient) dispatchError(err error) {
 	c.mu.RUnlock()
 
 	for _, h := range handlers {
-		h.fn(err)
+		func() {
+			defer func() { _ = recover() }() // Silently ignore panic in error handler
+			h.fn(err)
+		}()
 	}
+}
+
+// safeCall executes a handler function with panic recovery.
+func (c *ChatBotClient) safeCall(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.dispatchError(fmt.Errorf("handler panic: %v", r))
+		}
+	}()
+	fn()
 }
 
 // parseAuthor converts AuthorDetails to Author.

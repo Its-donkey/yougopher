@@ -28,7 +28,7 @@ func (m *mockTokenProvider) AccessToken(ctx context.Context) (string, error) {
 
 func TestNewChatBotClient(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	if bot.client != client {
 		t.Error("client not set correctly")
@@ -41,7 +41,7 @@ func TestNewChatBotClient(t *testing.T) {
 func TestNewChatBotClient_WithTokenProvider(t *testing.T) {
 	client := core.NewClient()
 	tp := &mockTokenProvider{token: "test-token"}
-	bot := NewChatBotClient(client, tp, "chat123")
+	bot, _ := NewChatBotClient(client, tp, "chat123")
 
 	if bot.tokenProvider != tp {
 		t.Error("tokenProvider not set correctly")
@@ -51,11 +51,28 @@ func TestNewChatBotClient_WithTokenProvider(t *testing.T) {
 func TestNewChatBotClient_WithPoller(t *testing.T) {
 	client := core.NewClient()
 	poller := NewLiveChatPoller(client, "chat123")
-	bot := NewChatBotClient(client, nil, "chat123", WithPoller(poller))
+	bot, _ := NewChatBotClient(client, nil, "chat123", WithPoller(poller))
 
 	if bot.poller != poller {
 		t.Error("poller not set correctly")
 	}
+}
+
+func TestNewChatBotClient_Validation(t *testing.T) {
+	t.Run("nil client", func(t *testing.T) {
+		_, err := NewChatBotClient(nil, nil, "chat123")
+		if err == nil {
+			t.Error("expected error for nil client")
+		}
+	})
+
+	t.Run("empty liveChatID", func(t *testing.T) {
+		client := core.NewClient()
+		_, err := NewChatBotClient(client, nil, "")
+		if err == nil {
+			t.Error("expected error for empty liveChatID")
+		}
+	})
 }
 
 func TestChatBotClient_ConnectClose(t *testing.T) {
@@ -70,7 +87,7 @@ func TestChatBotClient_ConnectClose(t *testing.T) {
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
 	tp := &mockTokenProvider{token: "test-token"}
-	bot := NewChatBotClient(client, tp, "chat123")
+	bot, _ := NewChatBotClient(client, tp, "chat123")
 
 	ctx := context.Background()
 
@@ -114,7 +131,7 @@ func TestChatBotClient_Connect_WithoutTokenProvider(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	ctx := context.Background()
 
@@ -153,7 +170,7 @@ func TestChatBotClient_OnMessage(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnMessage(func(msg *ChatMessage) {
 		mu.Lock()
@@ -220,7 +237,7 @@ func TestChatBotClient_OnSuperChat(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnSuperChat(func(event *SuperChatEvent) {
 		mu.Lock()
@@ -296,7 +313,7 @@ func TestChatBotClient_OnSuperSticker(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnSuperSticker(func(event *SuperStickerEvent) {
 		mu.Lock()
@@ -363,7 +380,7 @@ func TestChatBotClient_OnMembership(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnMembership(func(event *MembershipEvent) {
 		mu.Lock()
@@ -428,7 +445,7 @@ func TestChatBotClient_OnMemberMilestone(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnMemberMilestone(func(event *MemberMilestoneEvent) {
 		mu.Lock()
@@ -495,7 +512,7 @@ func TestChatBotClient_OnGiftMembership(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnGiftMembership(func(event *GiftMembershipEvent) {
 		mu.Lock()
@@ -533,6 +550,80 @@ func TestChatBotClient_OnGiftMembership(t *testing.T) {
 	_ = bot.Close()
 }
 
+func TestChatBotClient_OnGiftMembershipReceived(t *testing.T) {
+	var receivedEvents []*GiftMembershipReceivedEvent
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(LiveChatMessageListResponse{
+			PollingIntervalMillis: 100,
+			Items: []*LiveChatMessage{
+				{
+					ID: "gift-received-1",
+					Snippet: &MessageSnippet{
+						Type: MessageTypeGiftMembershipReceived,
+						GiftMembershipReceivedDetails: &GiftMembershipReceivedDetails{
+							MemberLevelName:                      "Gold Member",
+							GifterChannelID:                      "gifter123",
+							AssociatedMembershipGiftingMessageID: "giftmsg1",
+						},
+					},
+					AuthorDetails: &AuthorDetails{
+						ChannelID:   "channel1",
+						DisplayName: "Recipient User",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	bot, _ := NewChatBotClient(client, nil, "chat123")
+
+	bot.OnGiftMembershipReceived(func(event *GiftMembershipReceivedEvent) {
+		mu.Lock()
+		receivedEvents = append(receivedEvents, event)
+		mu.Unlock()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	_ = bot.Connect(ctx)
+
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	count := len(receivedEvents)
+	mu.Unlock()
+
+	if count == 0 {
+		t.Error("No GiftMembershipReceived events received")
+	}
+
+	mu.Lock()
+	if count > 0 {
+		event := receivedEvents[0]
+		if event.LevelName != "Gold Member" {
+			t.Errorf("LevelName = %q, want 'Gold Member'", event.LevelName)
+		}
+		if event.GifterChannelID != "gifter123" {
+			t.Errorf("GifterChannelID = %q, want 'gifter123'", event.GifterChannelID)
+		}
+		if event.AssociatedGiftingMessageID != "giftmsg1" {
+			t.Errorf("AssociatedGiftingMessageID = %q, want 'giftmsg1'", event.AssociatedGiftingMessageID)
+		}
+		if event.Author.DisplayName != "Recipient User" {
+			t.Errorf("Author.DisplayName = %q, want 'Recipient User'", event.Author.DisplayName)
+		}
+	}
+	mu.Unlock()
+
+	_ = bot.Close()
+}
+
 func TestChatBotClient_OnMessageDeleted(t *testing.T) {
 	var deletedID string
 	var mu sync.Mutex
@@ -557,7 +648,7 @@ func TestChatBotClient_OnMessageDeleted(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnMessageDeleted(func(id string) {
 		mu.Lock()
@@ -612,7 +703,7 @@ func TestChatBotClient_OnUserBanned(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnUserBanned(func(event *BanEvent) {
 		mu.Lock()
@@ -661,7 +752,7 @@ func TestChatBotClient_OnConnectDisconnect(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnConnect(func() {
 		connectCalled.Store(true)
@@ -700,7 +791,7 @@ func TestChatBotClient_OnError(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	bot.OnError(func(err error) {
 		errorReceived.Store(true)
@@ -740,7 +831,7 @@ func TestChatBotClient_Say(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	ctx := context.Background()
 	_ = bot.Connect(ctx)
@@ -765,7 +856,7 @@ func TestChatBotClient_Say(t *testing.T) {
 
 func TestChatBotClient_Say_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.Say(context.Background(), "Hello!")
 	if err != ErrNotRunning {
@@ -775,7 +866,7 @@ func TestChatBotClient_Say_NotConnected(t *testing.T) {
 
 func TestChatBotClient_Delete_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.Delete(context.Background(), "msg123")
 	if err != ErrNotRunning {
@@ -785,7 +876,7 @@ func TestChatBotClient_Delete_NotConnected(t *testing.T) {
 
 func TestChatBotClient_Ban_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.Ban(context.Background(), "channel123")
 	if err != ErrNotRunning {
@@ -795,7 +886,7 @@ func TestChatBotClient_Ban_NotConnected(t *testing.T) {
 
 func TestChatBotClient_Timeout_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.Timeout(context.Background(), "channel123", 300)
 	if err != ErrNotRunning {
@@ -805,7 +896,7 @@ func TestChatBotClient_Timeout_NotConnected(t *testing.T) {
 
 func TestChatBotClient_Unban_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.Unban(context.Background(), "ban123")
 	if err != ErrNotRunning {
@@ -815,7 +906,7 @@ func TestChatBotClient_Unban_NotConnected(t *testing.T) {
 
 func TestChatBotClient_AddModerator_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.AddModerator(context.Background(), "channel123")
 	if err != ErrNotRunning {
@@ -825,7 +916,7 @@ func TestChatBotClient_AddModerator_NotConnected(t *testing.T) {
 
 func TestChatBotClient_RemoveModerator_NotConnected(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	err := bot.RemoveModerator(context.Background(), "mod123")
 	if err != ErrNotRunning {
@@ -835,7 +926,7 @@ func TestChatBotClient_RemoveModerator_NotConnected(t *testing.T) {
 
 func TestChatBotClient_HandlerUnsubscribe(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	// Register all handler types
 	unsubs := []func(){
@@ -845,6 +936,7 @@ func TestChatBotClient_HandlerUnsubscribe(t *testing.T) {
 		bot.OnMembership(func(event *MembershipEvent) {}),
 		bot.OnMemberMilestone(func(event *MemberMilestoneEvent) {}),
 		bot.OnGiftMembership(func(event *GiftMembershipEvent) {}),
+		bot.OnGiftMembershipReceived(func(event *GiftMembershipReceivedEvent) {}),
 		bot.OnMessageDeleted(func(id string) {}),
 		bot.OnUserBanned(func(event *BanEvent) {}),
 		bot.OnConnect(func() {}),
@@ -859,6 +951,9 @@ func TestChatBotClient_HandlerUnsubscribe(t *testing.T) {
 	}
 	if len(bot.superChatHandlers) != 1 {
 		t.Error("superChatHandlers not registered")
+	}
+	if len(bot.giftMembershipReceivedHandlers) != 1 {
+		t.Error("giftMembershipReceivedHandlers not registered")
 	}
 	if len(bot.connectHandlers) != 1 {
 		t.Error("connectHandlers not registered")
@@ -878,6 +973,9 @@ func TestChatBotClient_HandlerUnsubscribe(t *testing.T) {
 	if len(bot.superChatHandlers) != 0 {
 		t.Error("superChatHandlers not unsubscribed")
 	}
+	if len(bot.giftMembershipReceivedHandlers) != 0 {
+		t.Error("giftMembershipReceivedHandlers not unsubscribed")
+	}
 	if len(bot.connectHandlers) != 0 {
 		t.Error("connectHandlers not unsubscribed")
 	}
@@ -886,7 +984,7 @@ func TestChatBotClient_HandlerUnsubscribe(t *testing.T) {
 
 func TestChatBotClient_HandleMessageNilSnippet(t *testing.T) {
 	client := core.NewClient()
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	var called bool
 	bot.OnMessage(func(msg *ChatMessage) {
@@ -957,7 +1055,7 @@ func TestChatBotClient_Close_Idempotent(t *testing.T) {
 	defer server.Close()
 
 	client := core.NewClient(core.WithBaseURL(server.URL))
-	bot := NewChatBotClient(client, nil, "chat123")
+	bot, _ := NewChatBotClient(client, nil, "chat123")
 
 	ctx := context.Background()
 	_ = bot.Connect(ctx)
