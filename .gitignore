@@ -1,0 +1,43 @@
+# Hidden directories (except .git*)
+.*
+!.git*
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+credentials.json
+token.json
+
+# Build output
+dist/
+bin/
