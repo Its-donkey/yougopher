@@ -62,18 +62,20 @@ const DefaultDailyQuota = 10000
 // QuotaTracker tracks YouTube API quota usage.
 // It is safe for concurrent use.
 type QuotaTracker struct {
-	mu       sync.RWMutex
-	used     int
-	limit    int
-	resetAt  time.Time
-	handlers []func(used, limit int)
+	mu            sync.RWMutex
+	used          int
+	limit         int
+	resetAt       time.Time
+	handlers      map[uint64]func(used, limit int)
+	nextHandlerID uint64
 }
 
 // NewQuotaTracker creates a new QuotaTracker with the specified daily limit.
 func NewQuotaTracker(limit int) *QuotaTracker {
 	return &QuotaTracker{
-		limit:   limit,
-		resetAt: nextPacificMidnight(),
+		limit:    limit,
+		resetAt:  nextPacificMidnight(),
+		handlers: make(map[uint64]func(used, limit int)),
 	}
 }
 
@@ -86,38 +88,44 @@ func (q *QuotaTracker) Add(operation string, count int) int {
 	}
 
 	q.mu.Lock()
-	defer q.mu.Unlock()
-
 	q.checkReset()
 	q.used += cost * count
-
-	// Notify handlers
+	used, limit := q.used, q.limit
+	// Snapshot handlers to call outside lock (prevents deadlock)
+	handlers := make([]func(int, int), 0, len(q.handlers))
 	for _, h := range q.handlers {
-		if h != nil {
-			h(q.used, q.limit)
-		}
+		handlers = append(handlers, h)
+	}
+	q.mu.Unlock()
+
+	// Notify handlers outside lock
+	for _, h := range handlers {
+		h(used, limit)
 	}
 
-	return q.used
+	return used
 }
 
 // AddCost records a specific quota cost.
 // Returns the total used quota after this operation.
 func (q *QuotaTracker) AddCost(cost int) int {
 	q.mu.Lock()
-	defer q.mu.Unlock()
-
 	q.checkReset()
 	q.used += cost
-
-	// Notify handlers
+	used, limit := q.used, q.limit
+	// Snapshot handlers to call outside lock (prevents deadlock)
+	handlers := make([]func(int, int), 0, len(q.handlers))
 	for _, h := range q.handlers {
-		if h != nil {
-			h(q.used, q.limit)
-		}
+		handlers = append(handlers, h)
+	}
+	q.mu.Unlock()
+
+	// Notify handlers outside lock
+	for _, h := range handlers {
+		h(used, limit)
 	}
 
-	return q.used
+	return used
 }
 
 // Used returns the current quota usage.
@@ -136,8 +144,8 @@ func (q *QuotaTracker) Limit() int {
 
 // Remaining returns the remaining quota for today.
 func (q *QuotaTracker) Remaining() int {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.checkReset()
 	remaining := q.limit - q.used
 	if remaining < 0 {
@@ -174,16 +182,14 @@ func (q *QuotaTracker) OnUsageChange(fn func(used, limit int)) func() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	q.handlers = append(q.handlers, fn)
-	idx := len(q.handlers) - 1
+	id := q.nextHandlerID
+	q.nextHandlerID++
+	q.handlers[id] = fn
 
 	return func() {
 		q.mu.Lock()
 		defer q.mu.Unlock()
-		// Remove handler by setting to nil (avoids slice reordering issues)
-		if idx < len(q.handlers) {
-			q.handlers[idx] = nil
-		}
+		delete(q.handlers, id)
 	}
 }
 
@@ -198,11 +204,22 @@ func (q *QuotaTracker) checkReset() {
 }
 
 // nextPacificMidnight returns the next midnight in Pacific Time.
+// YouTube API quotas reset at midnight Pacific Time (America/Los_Angeles).
 func nextPacificMidnight() time.Time {
 	loc, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
-		// Fallback to UTC-8 if timezone data unavailable
-		loc = time.FixedZone("PST", -8*60*60)
+		// Fallback if timezone data unavailable.
+		// Use approximate DST rules for US Pacific Time:
+		// DST is observed from second Sunday of March to first Sunday of November.
+		// This is an approximation; for accurate timing, ensure tzdata is available.
+		now := time.Now().UTC()
+		month := now.Month()
+		// PDT (UTC-7) roughly March-November, PST (UTC-8) otherwise
+		offset := -8 * 60 * 60 // PST
+		if month >= time.March && month < time.November {
+			offset = -7 * 60 * 60 // PDT (approximate)
+		}
+		loc = time.FixedZone("Pacific", offset)
 	}
 
 	now := time.Now().In(loc)

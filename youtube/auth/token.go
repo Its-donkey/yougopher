@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 )
@@ -174,13 +175,17 @@ func (t *Token) UnmarshalJSON(data []byte) error {
 	t.RefreshToken = tj.RefreshToken
 	t.Scopes = tj.Scopes
 
-	// Parse expiry from either expires_in or expiry field
+	// Parse expiry from either expiry field or expires_in
+	var expirySet bool
 	if tj.Expiry != "" {
 		expiry, err := time.Parse(time.RFC3339, tj.Expiry)
 		if err == nil {
 			t.Expiry = expiry
+			expirySet = true
 		}
-	} else if tj.ExpiresIn > 0 {
+		// If parsing fails, fall through to expires_in
+	}
+	if !expirySet && tj.ExpiresIn > 0 {
 		t.Expiry = time.Now().Add(time.Duration(tj.ExpiresIn) * time.Second)
 	}
 
@@ -203,10 +208,17 @@ func (tr *tokenResponse) toToken() *Token {
 		expiry = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
 	}
 
+	// Parse space-separated scopes from the OAuth response
+	var scopes []string
+	if tr.Scope != "" {
+		scopes = strings.Split(tr.Scope, " ")
+	}
+
 	return &Token{
 		AccessToken:  tr.AccessToken,
 		TokenType:    tr.TokenType,
 		RefreshToken: tr.RefreshToken,
 		Expiry:       expiry,
+		Scopes:       scopes,
 	}
 }

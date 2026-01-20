@@ -29,8 +29,8 @@ const (
 
 // Errors returned by the poller.
 var (
-	ErrAlreadyRunning = errors.New("poller already running")
-	ErrNotRunning     = errors.New("poller not running")
+	ErrAlreadyRunning = core.ErrAlreadyRunning
+	ErrNotRunning     = core.ErrNotRunning
 )
 
 // Handler wrapper types for pointer identity.
@@ -67,10 +67,11 @@ type LiveChatPoller struct {
 	pollCompleteHandlers []*pollCompleteHandler
 
 	// Lifecycle (context-based cancellation)
-	state   atomic.Int32
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	backoff *core.BackoffConfig
+	lifecycleMu sync.Mutex // Protects Start/Stop atomicity
+	state       atomic.Int32
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	backoff     *core.BackoffConfig
 
 	// Options
 	profileImageSize string // Default, medium, high
@@ -108,14 +109,34 @@ func WithMaxPollInterval(d time.Duration) PollerOption {
 }
 
 // WithBackoff sets a custom backoff configuration for retries.
+// If cfg is nil, the default backoff configuration is retained.
 func WithBackoff(cfg *core.BackoffConfig) PollerOption {
-	return func(p *LiveChatPoller) { p.backoff = cfg }
+	return func(p *LiveChatPoller) {
+		if cfg != nil {
+			p.backoff = cfg
+		}
+	}
 }
 
+// Profile image size constants.
+const (
+	ProfileImageDefault = "default" // 88px
+	ProfileImageMedium  = "medium"  // 240px
+	ProfileImageHigh    = "high"    // 800px
+)
+
 // WithProfileImageSize sets the profile image size to request.
-// Options: "default" (88px), "medium" (240px), "high" (800px).
+// Valid options: ProfileImageDefault (88px), ProfileImageMedium (240px), ProfileImageHigh (800px).
+// Invalid values default to "default".
 func WithProfileImageSize(size string) PollerOption {
-	return func(p *LiveChatPoller) { p.profileImageSize = size }
+	return func(p *LiveChatPoller) {
+		switch size {
+		case ProfileImageDefault, ProfileImageMedium, ProfileImageHigh:
+			p.profileImageSize = size
+		default:
+			p.profileImageSize = ProfileImageDefault
+		}
+	}
 }
 
 // LiveChatID returns the live chat ID being polled.
@@ -131,6 +152,13 @@ func (p *LiveChatPoller) IsRunning() bool {
 // Start begins polling for chat messages.
 // The poller will run until Stop is called or the context is cancelled.
 func (p *LiveChatPoller) Start(ctx context.Context) error {
+	if p.liveChatID == "" {
+		return errors.New("liveChatID cannot be empty")
+	}
+
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
 	// Atomically transition from stopped → starting
 	if !p.state.CompareAndSwap(stateStopped, stateStarting) {
 		return ErrAlreadyRunning
@@ -143,6 +171,7 @@ func (p *LiveChatPoller) Start(ctx context.Context) error {
 	p.wg.Add(1)
 	go p.pollLoop(pollCtx)
 
+	// Transition to running (under lock, so Stop can't race)
 	p.state.Store(stateRunning)
 	return nil
 }
@@ -150,31 +179,37 @@ func (p *LiveChatPoller) Start(ctx context.Context) error {
 // Stop stops the poller and waits for it to fully shut down.
 // Safe to call multiple times (idempotent).
 func (p *LiveChatPoller) Stop() {
-	// Atomically transition to stopping (from running or starting)
-	for {
-		state := p.state.Load()
-		if state == stateStopped || state == stateStopping {
-			return // Already stopped or stopping
-		}
-		if p.state.CompareAndSwap(state, stateStopping) {
-			break
-		}
+	p.lifecycleMu.Lock()
+
+	// Check if already stopped or stopping
+	state := p.state.Load()
+	if state == stateStopped || state == stateStopping {
+		p.lifecycleMu.Unlock()
+		return
 	}
+
+	// Transition to stopping
+	p.state.Store(stateStopping)
 
 	// Cancel context to signal all goroutines
 	if p.cancel != nil {
 		p.cancel()
 	}
 
-	// Wait for all goroutines to finish
+	p.lifecycleMu.Unlock()
+
+	// Wait for all goroutines to finish (outside lock to avoid deadlock)
 	p.wg.Wait()
 
+	// Note: pollLoop's defer also sets stateStopped, but we set it here too
+	// as a safety net in case Stop() is called before pollLoop starts.
 	p.state.Store(stateStopped)
 }
 
 // pollLoop is the main polling goroutine.
 func (p *LiveChatPoller) pollLoop(ctx context.Context) {
 	defer p.wg.Done()
+	defer p.state.Store(stateStopped) // Ensure state is stopped on exit
 
 	// Notify connect handlers
 	p.dispatchConnect()
@@ -561,6 +596,10 @@ func (p *LiveChatPoller) safeCall(fn func()) {
 
 // SendMessage sends a text message to the live chat.
 func (p *LiveChatPoller) SendMessage(ctx context.Context, text string) (*LiveChatMessage, error) {
+	if text == "" {
+		return nil, errors.New("text cannot be empty")
+	}
+
 	req := &InsertMessageRequest{
 		Snippet: &InsertMessageSnippet{
 			LiveChatID: p.liveChatID,
@@ -584,6 +623,10 @@ func (p *LiveChatPoller) SendMessage(ctx context.Context, text string) (*LiveCha
 
 // DeleteMessage deletes a message from the live chat.
 func (p *LiveChatPoller) DeleteMessage(ctx context.Context, messageID string) error {
+	if messageID == "" {
+		return errors.New("messageID cannot be empty")
+	}
+
 	query := url.Values{"id": {messageID}}
 
 	err := p.client.Delete(ctx, "liveChat/messages", query, "liveChatMessages.delete")
@@ -596,11 +639,20 @@ func (p *LiveChatPoller) DeleteMessage(ctx context.Context, messageID string) er
 
 // BanUser permanently bans a user from the live chat.
 func (p *LiveChatPoller) BanUser(ctx context.Context, channelID string) (*LiveChatBan, error) {
+	if channelID == "" {
+		return nil, errors.New("channelID cannot be empty")
+	}
 	return p.banUserInternal(ctx, channelID, BanTypePermanent, 0)
 }
 
 // TimeoutUser temporarily bans a user from the live chat.
 func (p *LiveChatPoller) TimeoutUser(ctx context.Context, channelID string, seconds int64) (*LiveChatBan, error) {
+	if channelID == "" {
+		return nil, errors.New("channelID cannot be empty")
+	}
+	if seconds <= 0 {
+		return nil, errors.New("seconds must be positive")
+	}
 	return p.banUserInternal(ctx, channelID, BanTypeTemporary, seconds)
 }
 
@@ -633,6 +685,10 @@ func (p *LiveChatPoller) banUserInternal(ctx context.Context, channelID, banType
 
 // UnbanUser removes a ban from the live chat.
 func (p *LiveChatPoller) UnbanUser(ctx context.Context, banID string) error {
+	if banID == "" {
+		return errors.New("banID cannot be empty")
+	}
+
 	query := url.Values{"id": {banID}}
 
 	err := p.client.Delete(ctx, "liveChat/bans", query, "liveChatBans.delete")
@@ -645,6 +701,10 @@ func (p *LiveChatPoller) UnbanUser(ctx context.Context, banID string) error {
 
 // AddModerator adds a moderator to the live chat.
 func (p *LiveChatPoller) AddModerator(ctx context.Context, channelID string) (*LiveChatModerator, error) {
+	if channelID == "" {
+		return nil, errors.New("channelID cannot be empty")
+	}
+
 	req := &InsertModeratorRequest{
 		Snippet: &InsertModeratorSnippet{
 			LiveChatID: p.liveChatID,
@@ -667,6 +727,10 @@ func (p *LiveChatPoller) AddModerator(ctx context.Context, channelID string) (*L
 
 // RemoveModerator removes a moderator from the live chat.
 func (p *LiveChatPoller) RemoveModerator(ctx context.Context, moderatorID string) error {
+	if moderatorID == "" {
+		return errors.New("moderatorID cannot be empty")
+	}
+
 	query := url.Values{"id": {moderatorID}}
 
 	err := p.client.Delete(ctx, "liveChat/moderators", query, "liveChatModerators.delete")
@@ -696,4 +760,26 @@ func (p *LiveChatPoller) SetPageToken(token string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pageToken = token
+}
+
+// ResetPageToken clears the page token.
+// Call this before restarting a stopped poller to start fresh.
+func (p *LiveChatPoller) ResetPageToken() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pageToken = ""
+}
+
+// Reset clears all polling state, preparing the poller for reuse.
+// This clears the page token and poll interval.
+// Returns ErrAlreadyRunning if the poller is currently running.
+func (p *LiveChatPoller) Reset() error {
+	if p.IsRunning() {
+		return ErrAlreadyRunning
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pageToken = ""
+	p.pollInterval = 0
+	return nil
 }

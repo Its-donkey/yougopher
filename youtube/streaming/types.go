@@ -1,26 +1,23 @@
 package streaming
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
 
 // Message types returned by the YouTube Live Chat API.
 const (
-	MessageTypeText                    = "textMessageEvent"
-	MessageTypeSuperChat               = "superChatEvent"
-	MessageTypeSuperSticker            = "superStickerEvent"
-	MessageTypeMembership              = "newSponsorEvent"
-	MessageTypeMemberMilestone         = "memberMilestoneChatEvent"
-	MessageTypeGiftMembershipReceived  = "giftMembershipReceivedEvent"
-	MessageTypeMembershipGifting       = "membershipGiftingEvent"
-	MessageTypeChatEnded               = "chatEndedEvent"
-	MessageTypeMessageDeleted          = "messageDeletedEvent"
-	MessageTypeUserBanned              = "userBannedEvent"
-	MessageTypePollOpened              = "pollEvent"          // Poll opened
-	MessageTypePollVotable             = "pollEvent"          // Poll accepting votes
-	MessageTypePollFinal               = "pollEvent"          // Poll closed
-	MessageTypeTombstone               = "tombstone"          // Deleted/moderated message
+	MessageTypeText                   = "textMessageEvent"
+	MessageTypeSuperChat              = "superChatEvent"
+	MessageTypeSuperSticker           = "superStickerEvent"
+	MessageTypeMembership             = "newSponsorEvent"
+	MessageTypeMemberMilestone        = "memberMilestoneChatEvent"
+	MessageTypeGiftMembershipReceived = "giftMembershipReceivedEvent"
+	MessageTypeMembershipGifting      = "membershipGiftingEvent"
+	MessageTypeChatEnded      = "chatEndedEvent"
+	MessageTypeMessageDeleted = "messageDeletedEvent"
+	MessageTypeUserBanned     = "userBannedEvent"
+	// MessageTypePoll covers all poll states. To distinguish poll states,
+	// check msg.Snippet.PollDetails.Status (PollStatusOpen, PollStatusClosed).
+	MessageTypePoll      = "pollEvent"
+	MessageTypeTombstone = "tombstone" // Deleted/moderated message
 )
 
 // LiveChatMessage represents a message from the YouTube Live Chat API.
@@ -500,17 +497,142 @@ type InsertModeratorSnippet struct {
 }
 
 // Clone creates a deep copy of the LiveChatMessage.
+// Returns nil if the receiver is nil.
 func (m *LiveChatMessage) Clone() *LiveChatMessage {
 	if m == nil {
 		return nil
 	}
-	data, err := json.Marshal(m)
-	if err != nil {
+	clone := *m
+	clone.Snippet = cloneMessageSnippet(m.Snippet)
+	clone.AuthorDetails = cloneAuthorDetails(m.AuthorDetails)
+	return &clone
+}
+
+func cloneMessageSnippet(snippet *MessageSnippet) *MessageSnippet {
+	if snippet == nil {
 		return nil
 	}
-	var clone LiveChatMessage
-	if err := json.Unmarshal(data, &clone); err != nil {
+	clone := *snippet
+	clone.TextMessageDetails = cloneTextMessageDetails(snippet.TextMessageDetails)
+	clone.SuperChatDetails = cloneSuperChatDetails(snippet.SuperChatDetails)
+	clone.SuperStickerDetails = cloneSuperStickerDetails(snippet.SuperStickerDetails)
+	clone.MemberMilestoneChatDetails = cloneMemberMilestoneChatDetails(snippet.MemberMilestoneChatDetails)
+	clone.NewSponsorDetails = cloneNewSponsorDetails(snippet.NewSponsorDetails)
+	clone.MembershipGiftingDetails = cloneMembershipGiftingDetails(snippet.MembershipGiftingDetails)
+	clone.GiftMembershipReceivedDetails = cloneGiftMembershipReceivedDetails(snippet.GiftMembershipReceivedDetails)
+	clone.MessageDeletedDetails = cloneMessageDeletedDetails(snippet.MessageDeletedDetails)
+	clone.UserBannedDetails = cloneUserBannedDetails(snippet.UserBannedDetails)
+	clone.PollDetails = clonePollDetails(snippet.PollDetails)
+	return &clone
+}
+
+func cloneAuthorDetails(details *AuthorDetails) *AuthorDetails {
+	if details == nil {
 		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneTextMessageDetails(details *TextMessageDetails) *TextMessageDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneSuperChatDetails(details *SuperChatDetails) *SuperChatDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneSuperStickerDetails(details *SuperStickerDetails) *SuperStickerDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	clone.SuperStickerMetadata = cloneSuperStickerMetadata(details.SuperStickerMetadata)
+	return &clone
+}
+
+func cloneSuperStickerMetadata(metadata *SuperStickerMetadata) *SuperStickerMetadata {
+	if metadata == nil {
+		return nil
+	}
+	clone := *metadata
+	return &clone
+}
+
+func cloneMemberMilestoneChatDetails(details *MemberMilestoneChatDetails) *MemberMilestoneChatDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneNewSponsorDetails(details *NewSponsorDetails) *NewSponsorDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneMembershipGiftingDetails(details *MembershipGiftingDetails) *MembershipGiftingDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneGiftMembershipReceivedDetails(details *GiftMembershipReceivedDetails) *GiftMembershipReceivedDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneMessageDeletedDetails(details *MessageDeletedDetails) *MessageDeletedDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func cloneUserBannedDetails(details *UserBannedDetails) *UserBannedDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	clone.BannedUserDetails = cloneBannedUserDetails(details.BannedUserDetails)
+	return &clone
+}
+
+func cloneBannedUserDetails(details *BannedUserDetails) *BannedUserDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	return &clone
+}
+
+func clonePollDetails(details *PollDetails) *PollDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
+	if len(details.Choices) > 0 {
+		choices := make([]PollChoice, len(details.Choices))
+		copy(choices, details.Choices)
+		clone.Choices = choices
 	}
 	return &clone
 }

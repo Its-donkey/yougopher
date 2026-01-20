@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,10 @@ const (
 
 	// DefaultUserAgent is the default User-Agent header.
 	DefaultUserAgent = "Yougopher/1.0"
+
+	// MaxResponseBodySize is the maximum response body size (10 MB).
+	// This prevents memory exhaustion from unexpectedly large responses.
+	MaxResponseBodySize = 10 * 1024 * 1024
 )
 
 // Client is an HTTP client for the YouTube API.
@@ -29,6 +34,7 @@ type Client struct {
 	baseURL      string
 	userAgent    string
 	quotaTracker *QuotaTracker
+	tokenMu      sync.RWMutex
 	accessToken  string
 	apiKey       string
 }
@@ -80,8 +86,18 @@ func WithAPIKey(key string) ClientOption {
 }
 
 // SetAccessToken updates the access token (for token refresh).
+// This method is safe for concurrent use.
 func (c *Client) SetAccessToken(token string) {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
 	c.accessToken = token
+}
+
+// getAccessToken returns the current access token.
+func (c *Client) getAccessToken() string {
+	c.tokenMu.RLock()
+	defer c.tokenMu.RUnlock()
+	return c.accessToken
 }
 
 // QuotaTracker returns the client's quota tracker, if any.
@@ -116,15 +132,19 @@ func (c *Client) Do(ctx context.Context, req *Request, result any) error {
 		c.quotaTracker.Add(req.Operation, 1)
 	}
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
+	// Read response body with size limit to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, MaxResponseBodySize+1)
+	body, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return fmt.Errorf("reading response: %w", err)
+	}
+	if len(body) > MaxResponseBodySize {
+		return fmt.Errorf("response body exceeds maximum size of %d bytes", MaxResponseBodySize)
 	}
 
 	// Handle error responses
 	if resp.StatusCode >= 400 {
-		return c.handleErrorResponse(resp.StatusCode, body)
+		return c.handleErrorResponse(resp.StatusCode, body, resp)
 	}
 
 	// Decode successful response
@@ -196,7 +216,8 @@ func (c *Client) newRequest(ctx context.Context, req *Request) (*http.Request, e
 	}
 
 	// Add API key if set and no access token
-	if c.apiKey != "" && c.accessToken == "" {
+	accessToken := c.getAccessToken()
+	if c.apiKey != "" && accessToken == "" {
 		query.Set("key", c.apiKey)
 	}
 
@@ -225,15 +246,15 @@ func (c *Client) newRequest(ctx context.Context, req *Request) (*http.Request, e
 		httpReq.Header.Set("Content-Type", "application/json")
 	}
 
-	if c.accessToken != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.accessToken)
+	if accessToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+accessToken)
 	}
 
 	return httpReq, nil
 }
 
 // handleErrorResponse parses an error response from the API.
-func (c *Client) handleErrorResponse(statusCode int, body []byte) error {
+func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Response) error {
 	// Try to parse as YouTube API error
 	var errResp ErrorResponse
 	if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error != nil {
@@ -250,8 +271,12 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte) error {
 		}
 
 		// Check for rate limiting
-		if statusCode == 429 || apiErr.Code == "rateLimitExceeded" {
-			return &RateLimitError{RetryAfter: 1 * time.Second}
+		if apiErr.IsRateLimited() {
+			return &RateLimitError{
+				RetryAfter: parseRetryAfter(resp),
+				Code:       apiErr.Code,
+				Message:    apiErr.Message,
+			}
 		}
 
 		return apiErr
@@ -262,6 +287,31 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte) error {
 		StatusCode: statusCode,
 		Message:    string(body),
 	}
+}
+
+// parseRetryAfter parses the Retry-After header and returns a duration.
+// Falls back to 1 second if the header is missing or invalid.
+func parseRetryAfter(resp *http.Response) time.Duration {
+	if resp == nil {
+		return 1 * time.Second
+	}
+
+	retryAfter := resp.Header.Get("Retry-After")
+	if retryAfter == "" {
+		return 1 * time.Second
+	}
+
+	// Try parsing as seconds
+	if seconds, err := time.ParseDuration(retryAfter + "s"); err == nil {
+		return seconds
+	}
+
+	// Try parsing as HTTP date
+	if t, err := time.Parse(time.RFC1123, retryAfter); err == nil {
+		return max(time.Until(t), 1*time.Second)
+	}
+
+	return 1 * time.Second
 }
 
 // quotaUsed returns current quota usage or 0 if not tracked.

@@ -41,7 +41,10 @@ func main() {
     })
 
     // Create chat bot
-    bot := streaming.NewChatBotClient(client, authClient, "live-chat-id")
+    bot, err := streaming.NewChatBotClient(client, authClient, "live-chat-id")
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Register message handler
     bot.OnMessage(func(msg *streaming.ChatMessage) {

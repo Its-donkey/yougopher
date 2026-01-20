@@ -305,6 +305,7 @@ func (c *AuthClient) StopAutoRefresh() {
 // refreshLoop periodically refreshes the token.
 func (c *AuthClient) refreshLoop(ctx context.Context) {
 	defer c.wg.Done()
+	defer c.state.Store(stateStopped) // Ensure state is stopped on exit
 
 	for {
 		c.mu.RLock()
@@ -360,9 +361,15 @@ func (c *AuthClient) doTokenRequest(ctx context.Context, data url.Values) (*Toke
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit response body to 1MB to prevent memory exhaustion
+	const maxResponseSize = 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxResponseSize+1)
+	body, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
+	}
+	if len(body) > maxResponseSize {
+		return nil, fmt.Errorf("response body exceeds maximum size of %d bytes", maxResponseSize)
 	}
 
 	if resp.StatusCode != http.StatusOK {
