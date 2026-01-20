@@ -16,3 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core: Configurable exponential backoff with test-friendly jitter injection
 - Core: Thread-safe quota tracker with automatic Pacific midnight reset
 - Core: Generic response types with pagination support
+- Auth: OAuth 2.0 authorization code flow with token exchange
+- Auth: Automatic token refresh with configurable early refresh window
+- Auth: Thread-safe token management with expiry tracking
+- Auth: YouTube API scopes (live chat, moderation, read-only, upload)
