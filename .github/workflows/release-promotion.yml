@@ -1,0 +1,56 @@
+name: Release Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Promote test to main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ inputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Version must match format vX.Y.Z or vX.Y.Z-suffix"
+            exit 1
+          fi
+
+      - name: Check version doesn't exist
+        run: |
+          if git tag -l | grep -q "^${{ inputs.version }}$"; then
+            echo "Error: Tag ${{ inputs.version }} already exists"
+            exit 1
+          fi
+
+      - name: Create promotion PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head test \
+            --title "Release ${{ inputs.version }}" \
+            --body "## Release Promotion
+
+          Promoting \`test\` branch to \`main\` for release **${{ inputs.version }}**
+
+          ### Checklist
+          - [ ] All tests passing on test branch
+          - [ ] CHANGELOG.md updated
+          - [ ] Version bump (if applicable)
+
+          After merging, the release workflow will automatically create the GitHub release."
