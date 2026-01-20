@@ -150,7 +150,9 @@ jobs:
           echo "updated=true" >> $GITHUB_OUTPUT
 
       - name: Commit CHANGELOG update
+        id: changelog_commit
         if: steps.changelog.outputs.updated == 'true'
+        continue-on-error: true
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
@@ -162,6 +164,12 @@ jobs:
           git commit -m "Release ${TAG_NAME}: Update CHANGELOG version"
           git push origin "$SOURCE_BRANCH"
           echo "✅ CHANGELOG update committed to $SOURCE_BRANCH branch"
+
+      - name: Warn if CHANGELOG commit failed
+        if: steps.changelog.outputs.updated == 'true' && steps.changelog_commit.outcome == 'failure'
+        run: |
+          echo "⚠️ Could not commit CHANGELOG update (branch protection may be blocking direct pushes)"
+          echo "Please update CHANGELOG.md manually before merging the PR"
 
       - name: Create promotion PR
         id: pr
@@ -225,6 +233,7 @@ jobs:
 
       - name: Add PR link to CHANGELOG
         if: steps.pr.outputs.created == 'true'
+        continue-on-error: true
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -257,7 +266,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "Add PR #${PR_NUMBER} link to CHANGELOG for ${TAG_NAME}"
-          git push origin "$SOURCE_BRANCH"
+          git push origin "$SOURCE_BRANCH" || echo "⚠️ Could not push PR link update (branch protection)"
 
           echo "✅ Added PR #${PR_NUMBER} link to CHANGELOG.md"
 
