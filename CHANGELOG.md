@@ -29,3 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming: Auto-retry on transient errors with exponential backoff
 - Streaming: Moderation actions (ban, timeout, unban, add/remove moderator)
 - Streaming: Send and delete message support
+- Streaming: ChatBotClient high-level wrapper with semantic event handlers
+- Streaming: Semantic event types (ChatMessage, SuperChatEvent, MembershipEvent, etc.)
+- Streaming: Author struct with role flags (IsModerator, IsOwner, IsMember, IsVerified)
+- Streaming: TokenProvider interface for flexible auth integration
+- Streaming: BanEvent with typed BanType (permanent/temporary) and duration
