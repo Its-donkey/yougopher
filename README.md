@@ -5,7 +5,7 @@ A YouTube API toolkit in Go focused on live chat bot functionality.
 ## Installation
 
 ```bash
-go get github.com/kelseykm/yougopher
+go get github.com/Its-donkey/yougopher
 ```
 
 ## Features
@@ -24,9 +24,9 @@ import (
     "context"
     "log"
 
-    "github.com/kelseykm/yougopher/youtube/auth"
-    "github.com/kelseykm/yougopher/youtube/core"
-    "github.com/kelseykm/yougopher/youtube/streaming"
+    "github.com/Its-donkey/yougopher/youtube/auth"
+    "github.com/Its-donkey/yougopher/youtube/core"
+    "github.com/Its-donkey/yougopher/youtube/streaming"
 )
 
 func main() {
@@ -41,7 +41,10 @@ func main() {
     })
 
     // Create chat bot
-    bot := streaming.NewChatBotClient(client, authClient, "live-chat-id")
+    bot, err := streaming.NewChatBotClient(client, authClient, "live-chat-id")
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Register message handler
     bot.OnMessage(func(msg *streaming.ChatMessage) {

@@ -1,0 +1,610 @@
+package streaming
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestLiveChatMessageListResponse_PollingInterval(t *testing.T) {
+	tests := []struct {
+		name   string
+		millis int
+		want   time.Duration
+	}{
+		{"zero", 0, 0},
+		{"one second", 1000, 1 * time.Second},
+		{"five seconds", 5000, 5 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &LiveChatMessageListResponse{PollingIntervalMillis: tt.millis}
+			got := resp.PollingInterval()
+			if got != tt.want {
+				t.Errorf("PollingInterval() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessageListResponse_IsChatEnded(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name      string
+		offlineAt *time.Time
+		want      bool
+	}{
+		{"not ended", nil, false},
+		{"ended", &now, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &LiveChatMessageListResponse{OfflineAt: tt.offlineAt}
+			got := resp.IsChatEnded()
+			if got != tt.want {
+				t.Errorf("IsChatEnded() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_Type(t *testing.T) {
+	tests := []struct {
+		name    string
+		snippet *MessageSnippet
+		want    string
+	}{
+		{"nil snippet", nil, ""},
+		{"text message", &MessageSnippet{Type: MessageTypeText}, MessageTypeText},
+		{"super chat", &MessageSnippet{Type: MessageTypeSuperChat}, MessageTypeSuperChat},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &LiveChatMessage{Snippet: tt.snippet}
+			got := msg.Type()
+			if got != tt.want {
+				t.Errorf("Type() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_Message(t *testing.T) {
+	tests := []struct {
+		name    string
+		snippet *MessageSnippet
+		want    string
+	}{
+		{"nil snippet", nil, ""},
+		{"with message", &MessageSnippet{DisplayMessage: "hello"}, "hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &LiveChatMessage{Snippet: tt.snippet}
+			got := msg.Message()
+			if got != tt.want {
+				t.Errorf("Message() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_TypeCheckers(t *testing.T) {
+	tests := []struct {
+		name               string
+		msgType            string
+		isText             bool
+		isSuperChat        bool
+		isSuperSticker     bool
+		isMembership       bool
+		isMemberMilestone  bool
+		isGiftMembership   bool
+	}{
+		{
+			name:       "text message",
+			msgType:    MessageTypeText,
+			isText:     true,
+		},
+		{
+			name:        "super chat",
+			msgType:     MessageTypeSuperChat,
+			isSuperChat: true,
+		},
+		{
+			name:           "super sticker",
+			msgType:        MessageTypeSuperSticker,
+			isSuperSticker: true,
+		},
+		{
+			name:         "membership",
+			msgType:      MessageTypeMembership,
+			isMembership: true,
+		},
+		{
+			name:              "member milestone",
+			msgType:           MessageTypeMemberMilestone,
+			isMemberMilestone: true,
+		},
+		{
+			name:             "gift membership",
+			msgType:          MessageTypeMembershipGifting,
+			isGiftMembership: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &LiveChatMessage{Snippet: &MessageSnippet{Type: tt.msgType}}
+
+			if got := msg.IsTextMessage(); got != tt.isText {
+				t.Errorf("IsTextMessage() = %v, want %v", got, tt.isText)
+			}
+			if got := msg.IsSuperChat(); got != tt.isSuperChat {
+				t.Errorf("IsSuperChat() = %v, want %v", got, tt.isSuperChat)
+			}
+			if got := msg.IsSuperSticker(); got != tt.isSuperSticker {
+				t.Errorf("IsSuperSticker() = %v, want %v", got, tt.isSuperSticker)
+			}
+			if got := msg.IsMembership(); got != tt.isMembership {
+				t.Errorf("IsMembership() = %v, want %v", got, tt.isMembership)
+			}
+			if got := msg.IsMemberMilestone(); got != tt.isMemberMilestone {
+				t.Errorf("IsMemberMilestone() = %v, want %v", got, tt.isMemberMilestone)
+			}
+			if got := msg.IsGiftMembership(); got != tt.isGiftMembership {
+				t.Errorf("IsGiftMembership() = %v, want %v", got, tt.isGiftMembership)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_Clone(t *testing.T) {
+	t.Run("nil message", func(t *testing.T) {
+		var msg *LiveChatMessage
+		got := msg.Clone()
+		if got != nil {
+			t.Errorf("Clone() of nil = %v, want nil", got)
+		}
+	})
+
+	t.Run("full message", func(t *testing.T) {
+		original := &LiveChatMessage{
+			Kind: "youtube#liveChatMessage",
+			ID:   "msg123",
+			Snippet: &MessageSnippet{
+				Type:           MessageTypeText,
+				LiveChatID:     "chat123",
+				DisplayMessage: "hello world",
+				TextMessageDetails: &TextMessageDetails{
+					MessageText: "hello world",
+				},
+			},
+			AuthorDetails: &AuthorDetails{
+				ChannelID:       "channel123",
+				DisplayName:     "Test User",
+				IsChatModerator: true,
+			},
+		}
+
+		clone := original.Clone()
+		if clone == original {
+			t.Error("Clone() returned same pointer")
+		}
+		if clone.ID != original.ID {
+			t.Errorf("Clone().ID = %q, want %q", clone.ID, original.ID)
+		}
+		if clone.Snippet.DisplayMessage != original.Snippet.DisplayMessage {
+			t.Errorf("Clone().Snippet.DisplayMessage = %q, want %q",
+				clone.Snippet.DisplayMessage, original.Snippet.DisplayMessage)
+		}
+		if clone.AuthorDetails.DisplayName != original.AuthorDetails.DisplayName {
+			t.Errorf("Clone().AuthorDetails.DisplayName = %q, want %q",
+				clone.AuthorDetails.DisplayName, original.AuthorDetails.DisplayName)
+		}
+
+		// Modify clone and verify original unchanged
+		clone.ID = "modified"
+		if original.ID == "modified" {
+			t.Error("Clone() did not create deep copy")
+		}
+	})
+}
+
+func TestLiveChatMessage_JSON(t *testing.T) {
+	jsonData := `{
+		"kind": "youtube#liveChatMessage",
+		"etag": "abc123",
+		"id": "msg123",
+		"snippet": {
+			"type": "textMessageEvent",
+			"liveChatId": "chat123",
+			"authorChannelId": "channel123",
+			"publishedAt": "2024-01-15T10:30:00Z",
+			"hasDisplayContent": true,
+			"displayMessage": "Hello world!",
+			"textMessageDetails": {
+				"messageText": "Hello world!"
+			}
+		},
+		"authorDetails": {
+			"channelId": "channel123",
+			"channelUrl": "https://www.youtube.com/channel/channel123",
+			"displayName": "Test User",
+			"profileImageUrl": "https://example.com/image.jpg",
+			"isVerified": false,
+			"isChatOwner": false,
+			"isChatSponsor": true,
+			"isChatModerator": false
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	if msg.ID != "msg123" {
+		t.Errorf("ID = %q, want 'msg123'", msg.ID)
+	}
+	if msg.Snippet.Type != MessageTypeText {
+		t.Errorf("Snippet.Type = %q, want %q", msg.Snippet.Type, MessageTypeText)
+	}
+	if msg.Snippet.DisplayMessage != "Hello world!" {
+		t.Errorf("Snippet.DisplayMessage = %q, want 'Hello world!'", msg.Snippet.DisplayMessage)
+	}
+	if msg.AuthorDetails.DisplayName != "Test User" {
+		t.Errorf("AuthorDetails.DisplayName = %q, want 'Test User'", msg.AuthorDetails.DisplayName)
+	}
+	if !msg.AuthorDetails.IsChatSponsor {
+		t.Error("AuthorDetails.IsChatSponsor = false, want true")
+	}
+}
+
+func TestSuperChatDetails_JSON(t *testing.T) {
+	jsonData := `{
+		"snippet": {
+			"type": "superChatEvent",
+			"superChatDetails": {
+				"amountMicros": "5000000",
+				"currency": "USD",
+				"amountDisplayString": "$5.00",
+				"userComment": "Great stream!",
+				"tier": 3
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	sc := msg.Snippet.SuperChatDetails
+	if sc == nil {
+		t.Fatal("SuperChatDetails is nil")
+	}
+	if sc.AmountMicros != 5000000 {
+		t.Errorf("AmountMicros = %d, want 5000000", sc.AmountMicros)
+	}
+	if sc.Currency != "USD" {
+		t.Errorf("Currency = %q, want 'USD'", sc.Currency)
+	}
+	if sc.AmountDisplayString != "$5.00" {
+		t.Errorf("AmountDisplayString = %q, want '$5.00'", sc.AmountDisplayString)
+	}
+	if sc.UserComment != "Great stream!" {
+		t.Errorf("UserComment = %q, want 'Great stream!'", sc.UserComment)
+	}
+	if sc.Tier != 3 {
+		t.Errorf("Tier = %d, want 3", sc.Tier)
+	}
+}
+
+func TestUserBannedDetails_JSON(t *testing.T) {
+	jsonData := `{
+		"snippet": {
+			"type": "userBannedEvent",
+			"userBannedDetails": {
+				"bannedUserDetails": {
+					"channelId": "banned123",
+					"displayName": "Bad User"
+				},
+				"banType": "temporary",
+				"banDurationSeconds": "300"
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	ban := msg.Snippet.UserBannedDetails
+	if ban == nil {
+		t.Fatal("UserBannedDetails is nil")
+	}
+	if ban.BanType != BanTypeTemporary {
+		t.Errorf("BanType = %q, want %q", ban.BanType, BanTypeTemporary)
+	}
+	if ban.BanDurationSeconds != 300 {
+		t.Errorf("BanDurationSeconds = %d, want 300", ban.BanDurationSeconds)
+	}
+	if ban.BannedUserDetails.ChannelID != "banned123" {
+		t.Errorf("BannedUserDetails.ChannelID = %q, want 'banned123'", ban.BannedUserDetails.ChannelID)
+	}
+}
+
+func TestMemberMilestoneChatDetails_JSON(t *testing.T) {
+	jsonData := `{
+		"snippet": {
+			"type": "memberMilestoneChatEvent",
+			"memberMilestoneChatDetails": {
+				"memberLevelName": "Sponsor",
+				"memberMonth": 12,
+				"userComment": "One year anniversary!"
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	milestone := msg.Snippet.MemberMilestoneChatDetails
+	if milestone == nil {
+		t.Fatal("MemberMilestoneChatDetails is nil")
+	}
+	if milestone.MemberLevelName != "Sponsor" {
+		t.Errorf("MemberLevelName = %q, want 'Sponsor'", milestone.MemberLevelName)
+	}
+	if milestone.MemberMonth != 12 {
+		t.Errorf("MemberMonth = %d, want 12", milestone.MemberMonth)
+	}
+	if milestone.UserComment != "One year anniversary!" {
+		t.Errorf("UserComment = %q, want 'One year anniversary!'", milestone.UserComment)
+	}
+}
+
+func TestNewSponsorDetails_JSON(t *testing.T) {
+	jsonData := `{
+		"snippet": {
+			"type": "newSponsorEvent",
+			"newSponsorDetails": {
+				"memberLevelName": "Premium",
+				"isUpgrade": true
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	sponsor := msg.Snippet.NewSponsorDetails
+	if sponsor == nil {
+		t.Fatal("NewSponsorDetails is nil")
+	}
+	if sponsor.MemberLevelName != "Premium" {
+		t.Errorf("MemberLevelName = %q, want 'Premium'", sponsor.MemberLevelName)
+	}
+	if !sponsor.IsUpgrade {
+		t.Error("IsUpgrade = false, want true")
+	}
+}
+
+func TestMessageDeletedDetails_JSON(t *testing.T) {
+	jsonData := `{
+		"snippet": {
+			"type": "messageDeletedEvent",
+			"messageDeletedDetails": {
+				"deletedMessageId": "deleted123"
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	deleted := msg.Snippet.MessageDeletedDetails
+	if deleted == nil {
+		t.Fatal("MessageDeletedDetails is nil")
+	}
+	if deleted.DeletedMessageID != "deleted123" {
+		t.Errorf("DeletedMessageID = %q, want 'deleted123'", deleted.DeletedMessageID)
+	}
+}
+
+func TestLiveChatMessageListResponse_JSON(t *testing.T) {
+	jsonData := `{
+		"kind": "youtube#liveChatMessageListResponse",
+		"etag": "xyz789",
+		"nextPageToken": "page2",
+		"pollingIntervalMillis": 5000,
+		"pageInfo": {
+			"totalResults": 100,
+			"resultsPerPage": 25
+		},
+		"items": [
+			{
+				"id": "msg1",
+				"snippet": {
+					"type": "textMessageEvent",
+					"displayMessage": "First message"
+				}
+			},
+			{
+				"id": "msg2",
+				"snippet": {
+					"type": "textMessageEvent",
+					"displayMessage": "Second message"
+				}
+			}
+		]
+	}`
+
+	var resp LiveChatMessageListResponse
+	err := json.Unmarshal([]byte(jsonData), &resp)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	if resp.NextPageToken != "page2" {
+		t.Errorf("NextPageToken = %q, want 'page2'", resp.NextPageToken)
+	}
+	if resp.PollingIntervalMillis != 5000 {
+		t.Errorf("PollingIntervalMillis = %d, want 5000", resp.PollingIntervalMillis)
+	}
+	if resp.PollingInterval() != 5*time.Second {
+		t.Errorf("PollingInterval() = %v, want 5s", resp.PollingInterval())
+	}
+	if len(resp.Items) != 2 {
+		t.Errorf("len(Items) = %d, want 2", len(resp.Items))
+	}
+	if resp.Items[0].ID != "msg1" {
+		t.Errorf("Items[0].ID = %q, want 'msg1'", resp.Items[0].ID)
+	}
+	if resp.PageInfo.TotalResults != 100 {
+		t.Errorf("PageInfo.TotalResults = %d, want 100", resp.PageInfo.TotalResults)
+	}
+}
+
+func TestInsertMessageRequest_JSON(t *testing.T) {
+	req := &InsertMessageRequest{
+		Snippet: &InsertMessageSnippet{
+			LiveChatID: "chat123",
+			Type:       MessageTypeText,
+			TextMessageDetails: &TextMessageDetails{
+				MessageText: "Hello!",
+			},
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	snippet, ok := parsed["snippet"].(map[string]any)
+	if !ok {
+		t.Fatal("snippet not found in JSON")
+	}
+	if snippet["liveChatId"] != "chat123" {
+		t.Errorf("liveChatId = %q, want 'chat123'", snippet["liveChatId"])
+	}
+	if snippet["type"] != MessageTypeText {
+		t.Errorf("type = %q, want %q", snippet["type"], MessageTypeText)
+	}
+}
+
+func TestInsertBanRequest_JSON(t *testing.T) {
+	req := &InsertBanRequest{
+		Snippet: &InsertBanSnippet{
+			LiveChatID:         "chat123",
+			Type:               BanTypeTemporary,
+			BanDurationSeconds: 300,
+			BannedUserDetails: &BannedUserDetails{
+				ChannelID: "user123",
+			},
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	snippet, ok := parsed["snippet"].(map[string]any)
+	if !ok {
+		t.Fatal("snippet not found in JSON")
+	}
+	if snippet["type"] != BanTypeTemporary {
+		t.Errorf("type = %q, want %q", snippet["type"], BanTypeTemporary)
+	}
+	if snippet["banDurationSeconds"] != float64(300) {
+		t.Errorf("banDurationSeconds = %v, want 300", snippet["banDurationSeconds"])
+	}
+}
+
+func TestMessageTypeConstants(t *testing.T) {
+	// Verify message type constants match expected YouTube API values
+	expectedTypes := map[string]string{
+		"text":                   "textMessageEvent",
+		"superChat":              "superChatEvent",
+		"superSticker":           "superStickerEvent",
+		"membership":             "newSponsorEvent",
+		"memberMilestone":        "memberMilestoneChatEvent",
+		"giftMembershipReceived": "giftMembershipReceivedEvent",
+		"membershipGifting":      "membershipGiftingEvent",
+		"chatEnded":              "chatEndedEvent",
+		"messageDeleted":         "messageDeletedEvent",
+		"userBanned":             "userBannedEvent",
+	}
+
+	actualTypes := map[string]string{
+		"text":                   MessageTypeText,
+		"superChat":              MessageTypeSuperChat,
+		"superSticker":           MessageTypeSuperSticker,
+		"membership":             MessageTypeMembership,
+		"memberMilestone":        MessageTypeMemberMilestone,
+		"giftMembershipReceived": MessageTypeGiftMembershipReceived,
+		"membershipGifting":      MessageTypeMembershipGifting,
+		"chatEnded":              MessageTypeChatEnded,
+		"messageDeleted":         MessageTypeMessageDeleted,
+		"userBanned":             MessageTypeUserBanned,
+	}
+
+	for key, expected := range expectedTypes {
+		actual, ok := actualTypes[key]
+		if !ok {
+			t.Errorf("Missing type constant for %q", key)
+			continue
+		}
+		if actual != expected {
+			t.Errorf("MessageType%s = %q, want %q", key, actual, expected)
+		}
+	}
+}
+
+func TestBanTypeConstants(t *testing.T) {
+	if BanTypePermanent != "permanent" {
+		t.Errorf("BanTypePermanent = %q, want 'permanent'", BanTypePermanent)
+	}
+	if BanTypeTemporary != "temporary" {
+		t.Errorf("BanTypeTemporary = %q, want 'temporary'", BanTypeTemporary)
+	}
+}
+
+func TestPollStatusConstants(t *testing.T) {
+	if PollStatusOpen != "open" {
+		t.Errorf("PollStatusOpen = %q, want 'open'", PollStatusOpen)
+	}
+	if PollStatusClosed != "closed" {
+		t.Errorf("PollStatusClosed = %q, want 'closed'", PollStatusClosed)
+	}
+}
