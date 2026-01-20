@@ -109,7 +109,7 @@ func (c *Client) Do(ctx context.Context, req *Request, result any) error {
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Track quota usage
 	if c.quotaTracker != nil && req.Operation != "" {
