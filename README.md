@@ -5,7 +5,7 @@ A YouTube API toolkit in Go focused on live chat bot functionality.
 ## Installation
 
 ```bash
-go get github.com/its-donkey/yougopher
+go get github.com/Its-donkey/yougopher
 ```
 
 ## Features
@@ -24,9 +24,9 @@ import (
     "context"
     "log"
 
-    "github.com/its-donkey/yougopher/youtube/auth"
-    "github.com/its-donkey/yougopher/youtube/core"
-    "github.com/its-donkey/yougopher/youtube/streaming"
+    "github.com/Its-donkey/yougopher/youtube/auth"
+    "github.com/Its-donkey/yougopher/youtube/core"
+    "github.com/Its-donkey/yougopher/youtube/streaming"
 )
 
 func main() {
