@@ -20,3 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth: Automatic token refresh with configurable early refresh window
 - Auth: Thread-safe token management with expiry tracking
 - Auth: YouTube API scopes (live chat, moderation, read-only, upload)
+- Streaming: LiveChatPoller with HTTP polling loop
+- Streaming: Dynamic poll interval from API response with configurable bounds
+- Streaming: pageToken pagination for continuous message retrieval
+- Streaming: All message type parsing (text, SuperChat, SuperSticker, membership, etc.)
+- Streaming: Composable handler pattern with idempotent unsubscribe
+- Streaming: Panic recovery in handlers
+- Streaming: Auto-retry on transient errors with exponential backoff
+- Streaming: Moderation actions (ban, timeout, unban, add/remove moderator)
+- Streaming: Send and delete message support
