@@ -96,7 +96,7 @@ func TestClient_Get(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"kind":  "youtube#videoListResponse",
 			"items": []map[string]string{{"id": "abc123"}},
 		})
@@ -129,13 +129,13 @@ func TestClient_Post(t *testing.T) {
 		}
 
 		var body map[string]string
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body["message"] != "Hello" {
 			t.Errorf("body[message] = %q, want Hello", body["message"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}))
 	defer server.Close()
 
@@ -158,7 +158,7 @@ func TestClient_Put(t *testing.T) {
 			t.Errorf("Method = %q, want PUT", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"updated": "true"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"updated": "true"})
 	}))
 	defer server.Close()
 
@@ -265,13 +265,13 @@ func TestClient_QuotaTracking(t *testing.T) {
 	)
 
 	// videos.list costs 1 quota
-	c.Get(context.Background(), "/videos", nil, "videos.list", nil)
+	_ = c.Get(context.Background(), "/videos", nil, "videos.list", nil)
 	if qt.Used() != 1 {
 		t.Errorf("Used() = %d, want 1", qt.Used())
 	}
 
 	// search.list costs 100 quota
-	c.Get(context.Background(), "/search", nil, "search.list", nil)
+	_ = c.Get(context.Background(), "/search", nil, "search.list", nil)
 	if qt.Used() != 101 {
 		t.Errorf("Used() = %d, want 101", qt.Used())
 	}
@@ -281,7 +281,7 @@ func TestClient_ErrorResponse_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{
 				"code":    400,
 				"message": "Invalid parameter",
@@ -316,7 +316,7 @@ func TestClient_ErrorResponse_QuotaExceeded(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{
 				"code":    403,
 				"message": "Quota exceeded",
@@ -348,7 +348,7 @@ func TestClient_ErrorResponse_RateLimit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{
 				"code":    429,
 				"message": "Rate limit exceeded",
@@ -379,7 +379,7 @@ func TestClient_ErrorResponse_RateLimit(t *testing.T) {
 func TestClient_ErrorResponse_GenericError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
