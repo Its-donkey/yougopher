@@ -1,83 +1,14 @@
 ---
 layout: default
-title: LiveBroadcasts.transition
-description: Transitions a YouTube live broadcast to a different lifecycle status
+title: TransitionBroadcast
+description: Transition a broadcast to a different lifecycle status
 ---
 
 Transitions a YouTube live broadcast to a different lifecycle status.
 
-## Request
+**Quota Cost:** 50 units
 
-### HTTP Request
-
-```
-POST https://www.googleapis.com/youtube/v3/liveBroadcasts/transition
-```
-
-### Parameters
-
-| Parameter | Required | Type | Description |
-|-----------|----------|------|-------------|
-| `id` | Yes | string | The ID of the broadcast to transition. |
-| `broadcastStatus` | Yes | string | The target status: `testing`, `live`, or `complete`. |
-| `part` | Yes | string | Comma-separated list of resource parts to include in the response. |
-
-### Authorization
-
-Requires OAuth 2.0 authorization with the following scope:
-
-- `https://www.googleapis.com/auth/youtube.force-ssl`
-
-### Request Body
-
-Do not provide a request body when calling this method.
-
-## Broadcast Lifecycle
-
-```
-created → ready → testing → live → complete
-```
-
-| Status | Description |
-|--------|-------------|
-| `created` | Broadcast was created but is not ready. |
-| `ready` | Broadcast is ready for testing. |
-| `testing` | Preview mode - only you can see the stream. |
-| `testStarting` | Transitioning to testing (asynchronous). |
-| `live` | Public broadcast - viewers can watch. |
-| `liveStarting` | Transitioning to live (asynchronous). |
-| `complete` | Broadcast has ended. |
-
-## Response
-
-If successful, this method returns the updated liveBroadcast resource.
-
-Note: The transition may be asynchronous. The response may show `testStarting` or `liveStarting` status. Poll the broadcast status until it reaches the target state.
-
-## Errors
-
-| Status Code | Error | Description |
-|-------------|-------|-------------|
-| 400 | `idRequired` | The broadcast ID is required. |
-| 400 | `invalidTransition` | The requested transition is not valid from the current state. |
-| 401 | `unauthorized` | The request is not authorized. |
-| 403 | `forbidden` | The user cannot transition this broadcast. |
-| 403 | `redundantTransition` | The broadcast is already in the requested state. |
-| 403 | `streamNotActive` | Cannot start testing without an active stream. |
-| 403 | `streamNotBound` | No stream is bound to this broadcast. |
-| 404 | `liveBroadcastNotFound` | The broadcast does not exist. |
-
-## Quota Cost
-
-This method consumes **50 quota units**.
-
----
-
-## Yougopher Implementation
-
-### TransitionBroadcast
-
-Transition a broadcast to a new lifecycle status.
+## TransitionBroadcast
 
 ```go
 broadcast, err := streaming.TransitionBroadcast(ctx, client,
@@ -92,19 +23,19 @@ if err != nil {
 fmt.Printf("Broadcast status: %s\n", broadcast.Status.LifeCycleStatus)
 ```
 
-### Transition Constants
+## Transition Constants
 
 ```go
-streaming.TransitionTesting  // "testing" - Start preview mode
-streaming.TransitionLive     // "live" - Go public
-streaming.TransitionComplete // "complete" - End broadcast
+streaming.TransitionTesting  // Start preview mode
+streaming.TransitionLive     // Go public
+streaming.TransitionComplete // End broadcast
 ```
 
-### Start Testing
+## Start Testing
 
-Transition to preview mode. Requires:
+Preview mode - only you can see the stream. Requires:
 - A stream bound to the broadcast
-- The stream actively receiving video data
+- The stream actively receiving video
 
 ```go
 broadcast, err := streaming.TransitionBroadcast(ctx, client,
@@ -121,10 +52,11 @@ if err != nil {
             log.Println("Bind a stream first")
         }
     }
+    log.Fatal(err)
 }
 ```
 
-### Go Live
+## Go Live
 
 Transition from testing to public broadcast.
 
@@ -142,9 +74,7 @@ if broadcast.IsLive() {
 }
 ```
 
-### End Broadcast
-
-End the broadcast and stop streaming.
+## End Broadcast
 
 ```go
 broadcast, err := streaming.TransitionBroadcast(ctx, client,
@@ -160,7 +90,7 @@ if broadcast.IsComplete() {
 }
 ```
 
-### Valid Transitions
+## Valid Transitions
 
 | From | To | Description |
 |------|----|-------------|
@@ -169,9 +99,9 @@ if broadcast.IsComplete() {
 | `testing` | `complete` | End without going live |
 | `live` | `complete` | End the broadcast |
 
-Invalid transitions (e.g., `live` → `testing`) will return an error.
+Invalid transitions (e.g., `live` → `testing`) return an error.
 
-### Handling Asynchronous Transitions
+## Handling Asynchronous Transitions
 
 Transitions may not be instantaneous. Poll for completion:
 
@@ -188,3 +118,12 @@ if broadcast.IsLive() {
     fmt.Println("Transition complete - you are live!")
 }
 ```
+
+## Common Errors
+
+| Error | Description |
+|-------|-------------|
+| `invalidTransition` | Invalid state transition |
+| `redundantTransition` | Already in requested state |
+| `streamNotActive` | No active video stream |
+| `streamNotBound` | No stream bound to broadcast |

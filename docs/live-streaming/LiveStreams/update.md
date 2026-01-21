@@ -1,92 +1,14 @@
 ---
 layout: default
-title: LiveStreams.update
-description: Updates an existing video stream
+title: UpdateStream
+description: Update an existing video stream
 ---
 
 Updates an existing video stream.
 
-## Request
+**Quota Cost:** 50 units
 
-### HTTP Request
-
-```
-PUT https://www.googleapis.com/youtube/v3/liveStreams
-```
-
-### Parameters
-
-| Parameter | Required | Type | Description |
-|-----------|----------|------|-------------|
-| `part` | Yes | string | Comma-separated list of resource parts being updated. |
-
-### Authorization
-
-Requires OAuth 2.0 authorization with the following scope:
-
-- `https://www.googleapis.com/auth/youtube.force-ssl`
-
-### Request Body
-
-Provide a liveStream resource in the request body. Must include the `id` field.
-
-```json
-{
-  "id": "string",
-  "snippet": {
-    "title": "string",
-    "description": "string"
-  },
-  "cdn": {
-    "resolution": "string",
-    "frameRate": "string"
-  },
-  "contentDetails": {
-    "isReusable": boolean
-  }
-}
-```
-
-### Required Fields
-
-| Field | Description |
-|-------|-------------|
-| `id` | The stream ID to update (required). |
-
-### Updatable Fields
-
-| Part | Fields |
-|------|--------|
-| `snippet` | `title`, `description` |
-| `cdn` | `resolution`, `frameRate` (only when not active) |
-| `contentDetails` | `isReusable` |
-
-## Response
-
-If successful, this method returns the updated liveStream resource.
-
-## Errors
-
-| Status Code | Error | Description |
-|-------------|-------|-------------|
-| 400 | `idRequired` | The stream ID is required. |
-| 400 | `invalidResolution` | The resolution value is invalid. |
-| 401 | `unauthorized` | The request is not authorized. |
-| 403 | `forbidden` | The user cannot update this stream. |
-| 403 | `liveStreamCannotBeUpdated` | CDN settings cannot be changed while stream is active. |
-| 404 | `liveStreamNotFound` | The stream does not exist. |
-
-## Quota Cost
-
-This method consumes **50 quota units**.
-
----
-
-## Yougopher Implementation
-
-### UpdateStream
-
-Update an existing stream.
+## UpdateStream
 
 ```go
 // Retrieve the existing stream
@@ -108,7 +30,7 @@ if err != nil {
 fmt.Printf("Updated stream: %s\n", updated.Snippet.Title)
 ```
 
-### Update CDN Settings
+## Update CDN Settings
 
 CDN settings can only be updated when the stream is not active.
 
@@ -125,7 +47,7 @@ stream.CDN.FrameRate = "60fps"
 updated, err := streaming.UpdateStream(ctx, client, stream, "cdn")
 ```
 
-### Make Stream Reusable
+## Make Stream Reusable
 
 ```go
 stream, _ := streaming.GetStream(ctx, client, streamID, "contentDetails")
@@ -134,8 +56,26 @@ stream.ContentDetails.IsReusable = true
 updated, err := streaming.UpdateStream(ctx, client, stream, "contentDetails")
 ```
 
-### Restrictions
+## Updatable Fields by Part
 
-- **CDN settings**: Cannot be changed while the stream is actively receiving video.
-- **Ingestion type**: Cannot be changed after creation. Create a new stream instead.
-- **Stream key**: Cannot be changed. Delete and recreate the stream to get a new key.
+| Part | Updatable Fields |
+|------|------------------|
+| `snippet` | `Title`, `Description` |
+| `cdn` | `Resolution`, `FrameRate` (only when not active) |
+| `contentDetails` | `IsReusable` |
+
+## Restrictions
+
+| Field | Restriction |
+|-------|-------------|
+| `IngestionType` | Cannot be changed after creation |
+| `StreamKey` | Cannot be changed - delete and recreate stream |
+| CDN settings | Cannot be changed while actively streaming |
+
+## Common Errors
+
+| Error | Description |
+|-------|-------------|
+| `NotFoundError` | Stream doesn't exist |
+| `liveStreamCannotBeUpdated` | CDN settings cannot be changed while active |
+| `invalidResolution` | Invalid resolution value |

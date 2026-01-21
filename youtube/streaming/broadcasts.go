@@ -29,6 +29,12 @@ type LiveBroadcast struct {
 
 	// ContentDetails contains broadcast-specific settings.
 	ContentDetails *BroadcastContentDetails `json:"contentDetails,omitempty"`
+
+	// Statistics contains broadcast statistics.
+	Statistics *BroadcastStatistics `json:"statistics,omitempty"`
+
+	// MonetizationDetails contains monetization settings.
+	MonetizationDetails *BroadcastMonetizationDetails `json:"monetizationDetails,omitempty"`
 }
 
 // BroadcastSnippet contains basic details about a broadcast.
@@ -163,6 +169,37 @@ type MonitorStreamInfo struct {
 
 	// EmbedHTML is the HTML code to embed the monitor stream.
 	EmbedHTML string `json:"embedHtml,omitempty"`
+}
+
+// BroadcastStatistics contains broadcast statistics.
+// Note: The totalChatCount field is deprecated by YouTube but still returned.
+type BroadcastStatistics struct {
+	// TotalChatCount is the total number of live chat messages.
+	// Deprecated: This field is deprecated by the YouTube API.
+	TotalChatCount uint64 `json:"totalChatCount,omitempty,string"`
+}
+
+// BroadcastMonetizationDetails contains monetization settings for the broadcast.
+type BroadcastMonetizationDetails struct {
+	// CuepointSchedule contains settings for automatic ad cuepoint scheduling.
+	CuepointSchedule *CuepointSchedule `json:"cuepointSchedule,omitempty"`
+}
+
+// CuepointSchedule contains settings for automatic ad cuepoint scheduling.
+type CuepointSchedule struct {
+	// Enabled indicates if automatic cuepoint scheduling is enabled.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// PauseAdsUntil is the time until which ads are paused.
+	// Format: RFC 3339 datetime.
+	PauseAdsUntil string `json:"pauseAdsUntil,omitempty"`
+
+	// ScheduleStrategy is the strategy for scheduling cuepoints.
+	// Values: "CONCURRENT", "NON_CONCURRENT"
+	ScheduleStrategy string `json:"scheduleStrategy,omitempty"`
+
+	// RepeatIntervalSecs is the interval between scheduled cuepoints in seconds.
+	RepeatIntervalSecs int `json:"repeatIntervalSecs,omitempty"`
 }
 
 // Broadcast lifecycle status constants.
@@ -589,6 +626,33 @@ func (b *LiveBroadcast) BoundStreamID() string {
 // HasBoundStream returns true if a stream is bound to this broadcast.
 func (b *LiveBroadcast) HasBoundStream() bool {
 	return b.BoundStreamID() != ""
+}
+
+// TotalChatCount returns the total number of chat messages in the broadcast.
+// Returns 0 if statistics are not available.
+// Deprecated: This field is deprecated by the YouTube API.
+func (b *LiveBroadcast) TotalChatCount() uint64 {
+	if b.Statistics == nil {
+		return 0
+	}
+	return b.Statistics.TotalChatCount
+}
+
+// HasCuepointSchedule returns true if automatic ad scheduling is enabled.
+func (b *LiveBroadcast) HasCuepointSchedule() bool {
+	if b.MonetizationDetails == nil || b.MonetizationDetails.CuepointSchedule == nil {
+		return false
+	}
+	return b.MonetizationDetails.CuepointSchedule.Enabled
+}
+
+// CuepointRepeatInterval returns the interval between scheduled ad cuepoints in seconds.
+// Returns 0 if not configured.
+func (b *LiveBroadcast) CuepointRepeatInterval() int {
+	if b.MonetizationDetails == nil || b.MonetizationDetails.CuepointSchedule == nil {
+		return 0
+	}
+	return b.MonetizationDetails.CuepointSchedule.RepeatIntervalSecs
 }
 
 // InsertCuepointParams contains parameters for inserting a cuepoint.
