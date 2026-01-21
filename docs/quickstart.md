@@ -4,6 +4,12 @@ title: Quick Start
 description: Get started with Yougopher in minutes
 ---
 
+<div style="text-align: center; margin-bottom: 2rem;">
+  <img src="{{ '/assets/images/logo.png' | relative_url }}" alt="Yougopher" style="width: 180px; height: 180px;">
+  <h1 style="margin-top: 1rem;">Quick Start</h1>
+  <p style="font-size: 1.125rem; color: #53535F;">Get up and running with Yougopher in minutes.</p>
+</div>
+
 ## Prerequisites
 
 Before you begin, you'll need:
