@@ -4,6 +4,12 @@ title: Home
 description: A YouTube API toolkit in Go focused on live chat bot functionality
 ---
 
+<div style="text-align: center; margin-bottom: 2rem;">
+  <img src="{{ '/assets/images/logo.png' | relative_url }}" alt="Yougopher" style="width: 180px; height: 180px;">
+  <h1 style="margin-top: 1rem;">Yougopher</h1>
+  <p style="font-size: 1.125rem; color: #53535F;">A comprehensive Go wrapper for the YouTube Data API with full endpoint coverage, multiple authentication flows, and real-time streaming support.</p>
+</div>
+
 ## What is Yougopher?
 
 Yougopher is a Go library for interacting with the YouTube Data API v3 and YouTube Live Streaming API. It provides a clean, idiomatic Go interface for building YouTube integrations, with a focus on live chat and streaming functionality.
