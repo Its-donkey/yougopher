@@ -1,13 +1,12 @@
 ---
 layout: default
-title: Home
+title: Yougopher
 description: A YouTube API toolkit in Go focused on live chat bot functionality
 ---
 
 <div style="text-align: center; margin-bottom: 2rem;">
   <img src="{{ '/assets/images/logo.png' | relative_url }}" alt="Yougopher" style="width: 180px; height: 180px;">
-  <h1 style="margin-top: 1rem;">Yougopher</h1>
-  <p style="font-size: 1.125rem; color: #53535F;">A comprehensive Go wrapper for the YouTube Data API with full endpoint coverage, multiple authentication flows, and real-time streaming support.</p>
+  <p style="font-size: 1.125rem; color: #53535F;"><span style="font-weight: 600; color: #0066cc;">Yougopher</span> is a comprehensive Go wrapper for the YouTube Data API with full endpoint coverage, multiple authentication flows, and real-time streaming support.</p>
 </div>
 
 ## What is Yougopher?
