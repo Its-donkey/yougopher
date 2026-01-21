@@ -144,7 +144,7 @@ func main() {
 		client.SetAccessToken(token.AccessToken)
 		_ = authClient.StartAutoRefresh(ctx)
 
-		fmt.Fprintf(w, "Authentication successful!")
+		_, _ = fmt.Fprintf(w, "Authentication successful!")
 		close(authDone)
 	})
 
@@ -241,7 +241,7 @@ func main() {
 	if err := bot.Connect(ctx); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer bot.Close()
+	defer func() { _ = bot.Close() }()
 
 	log.Println("Moderation bot running! Commands: !ban <user>, !timeout <user> [seconds], !unban <banID>")
 
@@ -308,7 +308,7 @@ func handleModCommand(ctx context.Context, bot *streaming.ChatBotClient, msg *st
 		parts := strings.Fields(args)
 		duration := 300 // default 5 minutes
 		if len(parts) > 1 {
-			fmt.Sscanf(parts[1], "%d", &duration)
+			_, _ = fmt.Sscanf(parts[1], "%d", &duration)
 		}
 		log.Printf("MOD ACTION: %s requested %ds timeout for %s",
 			msg.Author.DisplayName, duration, parts[0])

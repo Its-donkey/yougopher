@@ -69,7 +69,7 @@ func main() {
 			return
 		}
 
-		fmt.Fprintf(w, "Authentication successful! Check your terminal for the dashboard.")
+		_, _ = fmt.Fprintf(w, "Authentication successful! Check your terminal for the dashboard.")
 		close(authDone)
 	})
 

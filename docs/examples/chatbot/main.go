@@ -94,7 +94,7 @@ func main() {
 			log.Printf("Warning: Could not start auto-refresh: %v", err)
 		}
 
-		fmt.Fprintf(w, "Authentication successful! You can close this window.")
+		_, _ = fmt.Fprintf(w, "Authentication successful! You can close this window.")
 		close(authDone)
 	})
 
@@ -189,7 +189,7 @@ func main() {
 	if err := bot.Connect(ctx); err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer bot.Close()
+	defer func() { _ = bot.Close() }()
 
 	log.Println("Bot is running! Press Ctrl+C to stop.")
 
@@ -205,19 +205,19 @@ func main() {
 func handleCommand(ctx context.Context, bot *streaming.ChatBotClient, msg *streaming.ChatMessage) {
 	text := strings.TrimSpace(msg.Message)
 
-	switch {
-	case text == "!hello":
+	switch text {
+	case "!hello":
 		if err := bot.Say(ctx, fmt.Sprintf("Hello, %s!", msg.Author.DisplayName)); err != nil {
 			log.Printf("Failed to send message: %v", err)
 		}
 
-	case text == "!time":
+	case "!time":
 		now := time.Now().Format("3:04 PM MST")
 		if err := bot.Say(ctx, fmt.Sprintf("The current time is %s", now)); err != nil {
 			log.Printf("Failed to send message: %v", err)
 		}
 
-	case text == "!help":
+	case "!help":
 		if err := bot.Say(ctx, "Available commands: !hello, !time, !help"); err != nil {
 			log.Printf("Failed to send message: %v", err)
 		}
