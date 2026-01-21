@@ -111,6 +111,13 @@ a:hover {
   list-style: none;
   gap: var(--spacing-xl);
   height: 100%;
+  margin: 0;
+}
+
+.navbar-links li {
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .navbar-links a {
@@ -361,7 +368,6 @@ blockquote {
   background: var(--color-footer);
   color: rgba(255,255,255,0.9);
   padding: var(--spacing-2xl) var(--spacing-lg);
-  margin-right: var(--sidebar-width);
 }
 
 .footer-container {
@@ -411,6 +417,12 @@ blockquote {
   color: rgba(255,255,255,0.6);
 }
 
+.footer-disclaimer {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: var(--spacing-sm);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .sidebar {
@@ -420,10 +432,6 @@ blockquote {
   .main-content {
     margin-right: 0;
     max-width: 100%;
-  }
-
-  .footer {
-    margin-right: 0;
   }
 }
 
