@@ -557,6 +557,37 @@ if broadcast.IsComplete() {
 }
 ```
 
+### Broadcast Statistics
+
+Get statistics about the broadcast (chat message count).
+
+```go
+broadcast, err := streaming.GetBroadcast(ctx, client, broadcastID, "statistics")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Note: totalChatCount is deprecated by YouTube but still returned
+chatCount := broadcast.TotalChatCount()
+fmt.Printf("Total chat messages: %d\n", chatCount)
+```
+
+### Broadcast Monetization
+
+Check monetization settings and cuepoint scheduling.
+
+```go
+broadcast, err := streaming.GetBroadcast(ctx, client, broadcastID, "monetizationDetails")
+if err != nil {
+    log.Fatal(err)
+}
+
+if broadcast.HasCuepointSchedule() {
+    interval := broadcast.CuepointRepeatInterval()
+    fmt.Printf("Auto ad breaks every %d seconds\n", interval)
+}
+```
+
 ### GetBroadcasts
 
 Get multiple broadcasts with filtering options.

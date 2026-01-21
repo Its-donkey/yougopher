@@ -4,72 +4,31 @@ title: LiveChatModerators
 description: Manage moderators for YouTube live chat
 ---
 
-A `liveChatModerator` resource represents a moderator for a YouTube live chat.
+A `LiveChatModerator` represents a moderator for a YouTube live chat. Moderators can delete messages and ban users.
 
-Moderators can delete messages and ban users from the chat. Only the broadcast owner can add or remove moderators.
+## Functions
 
-## Methods
+| Function | Quota | Description |
+|----------|-------|-------------|
+| [ListModerators](list) | 50 | List chat moderators |
+| [AddModerator](insert) | 50 | Add a moderator |
+| [RemoveModerator](delete) | 50 | Remove a moderator |
 
-| Method | HTTP Request | Description |
-|--------|--------------|-------------|
-| [list](list) | `GET /liveChat/moderators` | Lists the moderators for a live chat. |
-| [insert](insert) | `POST /liveChat/moderators` | Adds a moderator to a live chat. |
-| [delete](delete) | `DELETE /liveChat/moderators` | Removes a moderator from a live chat. |
-
-## Resource Representation
-
-```json
-{
-  "kind": "youtube#liveChatModerator",
-  "etag": string,
-  "id": string,
-  "snippet": {
-    "liveChatId": string,
-    "moderatorDetails": {
-      "channelId": string,
-      "channelUrl": string,
-      "displayName": string,
-      "profileImageUrl": string
-    }
-  }
-}
-```
-
-## Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `kind` | string | Identifies the resource type. Value: `youtube#liveChatModerator`. |
-| `etag` | string | The ETag of the resource. |
-| `id` | string | The ID that YouTube assigns to uniquely identify the moderator. |
-
-### snippet
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `snippet.liveChatId` | string | The ID of the live chat where the user is a moderator. |
-| `snippet.moderatorDetails.channelId` | string | The moderator's channel ID. |
-| `snippet.moderatorDetails.channelUrl` | string | The URL of the moderator's channel. |
-| `snippet.moderatorDetails.displayName` | string | The moderator's display name. |
-| `snippet.moderatorDetails.profileImageUrl` | string | The URL of the moderator's profile image. |
-
----
-
-## Yougopher Type
+## Type Definition
 
 ```go
 type LiveChatModerator struct {
-    Kind    string              `json:"kind,omitempty"`
-    ETag    string              `json:"etag,omitempty"`
-    ID      string              `json:"id,omitempty"`
-    Snippet *ModeratorSnippet   `json:"snippet,omitempty"`
+    Kind    string            `json:"kind,omitempty"`
+    ETag    string            `json:"etag,omitempty"`
+    ID      string            `json:"id,omitempty"`
+    Snippet *ModeratorSnippet `json:"snippet,omitempty"`
 }
 ```
 
-### Moderator Permissions
+## Moderator Permissions
 
-| Action | Broadcast Owner | Moderator | Regular Viewer |
-|--------|-----------------|-----------|----------------|
+| Action | Owner | Moderator | Viewer |
+|--------|-------|-----------|--------|
 | Delete any message | Yes | Yes | No |
 | Delete own message | Yes | Yes | Yes |
 | Ban/timeout users | Yes | Yes | No |
@@ -78,9 +37,28 @@ type LiveChatModerator struct {
 | List moderators | Yes | No | No |
 | Change chat mode | Yes | No | No |
 
-### Notes
+## Notes
 
-- Moderators are specific to a single live chat, not the channel.
-- The same user can be a moderator in multiple chats.
-- The broadcast owner is not included in the moderator list.
-- Removing a moderator does not ban them; they can still chat normally.
+- Moderators are specific to a single live chat, not the channel
+- The same user can be a moderator in multiple chats
+- The broadcast owner is not included in the moderator list
+- Removing a moderator doesn't ban them
+
+## Quick Example
+
+```go
+import "github.com/Its-donkey/yougopher/youtube/streaming"
+
+poller := streaming.NewLiveChatPoller(client, liveChatID)
+
+// Add a moderator
+mod, err := poller.AddModerator(ctx, "channel-id")
+
+// List moderators
+resp, err := poller.ListModerators(ctx, &streaming.ListModeratorsParams{
+    MaxResults: 50,
+})
+
+// Remove a moderator
+err := poller.RemoveModerator(ctx, mod.ID)
+```

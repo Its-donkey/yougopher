@@ -1,13 +1,24 @@
 ---
 layout: default
-title: Home
+title: Yougopher
 description: A YouTube API toolkit in Go focused on live chat bot functionality
 ---
+
+<div style="text-align: center; margin-bottom: 2rem;">
+  <img src="{{ '/assets/images/logo.png' | relative_url }}" alt="Yougopher" style="width: 180px; height: 180px;">
+  <p style="font-size: 1.125rem; color: #53535F;"><span style="font-weight: 600; color: rgb(26, 26, 46);">Yougopher</span> is a comprehensive Go wrapper for the YouTube Data API with full endpoint coverage, multiple authentication flows, and real-time streaming support.</p>
+</div>
 
 ## What is Yougopher?
 
 Yougopher is a Go library for interacting with the YouTube Data API v3 and YouTube Live Streaming API. It provides a clean, idiomatic Go interface for building YouTube integrations, with a focus on live chat and streaming functionality.
 
+## Getting Started
+
+[Quick Start Guide](quickstart) - Set up authentication and make your first API call
+[API Reference](api-reference) - Complete API documentation
+[Cookbook](cookbook) - Common recipes and patterns
+   
 ## Features
 
 - **Authentication** - OAuth 2.0, device flow, and service account support
@@ -16,6 +27,22 @@ Yougopher is a Go library for interacting with the YouTube Data API v3 and YouTu
 - **Real-time Chat** - Polling and SSE streaming for live chat messages
 - **Built-in Caching** - Configurable response caching with TTL
 - **Rate Limiting** - Automatic quota management and retry logic
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `youtube/auth` | OAuth 2.0 authentication flows |
+| `youtube/core` | HTTP client, caching, middleware |
+| `youtube/data` | Data API (videos, channels, etc.) |
+| `youtube/analytics` | Analytics and reporting API |
+| `youtube/streaming` | Live streaming and chat API |
+
+## Requirements
+
+- Go 1.21 or later
+- YouTube Data API v3 credentials
+- OAuth 2.0 client ID (for user authentication)
 
 ## Installation
 
@@ -72,28 +99,6 @@ func main() {
     fmt.Printf("Subscribers: %d\n", channel.Statistics.SubscriberCount)
 }
 ```
-
-## Packages
-
-| Package | Description |
-|---------|-------------|
-| `youtube/auth` | OAuth 2.0 authentication flows |
-| `youtube/core` | HTTP client, caching, middleware |
-| `youtube/data` | Data API (videos, channels, etc.) |
-| `youtube/analytics` | Analytics and reporting API |
-| `youtube/streaming` | Live streaming and chat API |
-
-## Getting Started
-
-1. [Quick Start Guide](quickstart) - Set up authentication and make your first API call
-2. [API Reference](api-reference) - Complete API documentation
-3. [Cookbook](cookbook) - Common recipes and patterns
-
-## Requirements
-
-- Go 1.21 or later
-- YouTube Data API v3 credentials
-- OAuth 2.0 client ID (for user authentication)
 
 ## License
 

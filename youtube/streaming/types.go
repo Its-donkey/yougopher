@@ -87,6 +87,15 @@ type MessageSnippet struct {
 
 	// PollDetails contains details for poll events.
 	PollDetails *PollDetails `json:"pollDetails,omitempty"`
+
+	// ActivePollItem contains the poll data when this message represents an active poll.
+	// Each poll is a liveChatMessage resource with type pollEvent. There can only be
+	// one active poll per chat at a time.
+	ActivePollItem *LiveChatMessage `json:"activePollItem,omitempty"`
+
+	// FanFundingEventDetails contains details for legacy Fan Funding events.
+	// Deprecated: Fan Funding was replaced by Super Chat in 2017.
+	FanFundingEventDetails *FanFundingEventDetails `json:"fanFundingEventDetails,omitempty"`
 }
 
 // AuthorDetails contains information about a message author.
@@ -287,6 +296,23 @@ const (
 	PollStatusClosed = "closed"
 )
 
+// FanFundingEventDetails contains details for legacy Fan Funding events.
+// Deprecated: Fan Funding was replaced by Super Chat in 2017. This type exists
+// only for backwards compatibility with old events.
+type FanFundingEventDetails struct {
+	// AmountMicros is the donation amount in micros (1/1,000,000 of currency unit).
+	AmountMicros int64 `json:"amountMicros,omitempty,string"`
+
+	// Currency is the ISO 4217 currency code.
+	Currency string `json:"currency,omitempty"`
+
+	// AmountDisplayString is the formatted donation amount.
+	AmountDisplayString string `json:"amountDisplayString,omitempty"`
+
+	// UserComment is the optional message from the donor.
+	UserComment string `json:"userComment,omitempty"`
+}
+
 // LiveChatMessageListResponse is the response from liveChatMessages.list.
 type LiveChatMessageListResponse struct {
 	// Kind identifies the resource type.
@@ -374,6 +400,27 @@ func (m *LiveChatMessage) IsMemberMilestone() bool {
 // IsGiftMembership returns true if this is a gift membership event.
 func (m *LiveChatMessage) IsGiftMembership() bool {
 	return m.Type() == MessageTypeMembershipGifting
+}
+
+// IsPoll returns true if this is a poll event.
+func (m *LiveChatMessage) IsPoll() bool {
+	return m.Type() == MessageTypePoll
+}
+
+// HasActivePoll returns true if this message contains an active poll item.
+func (m *LiveChatMessage) HasActivePoll() bool {
+	if m.Snippet == nil {
+		return false
+	}
+	return m.Snippet.ActivePollItem != nil
+}
+
+// ActivePoll returns the active poll item, or nil if none.
+func (m *LiveChatMessage) ActivePoll() *LiveChatMessage {
+	if m.Snippet == nil {
+		return nil
+	}
+	return m.Snippet.ActivePollItem
 }
 
 // LiveChatBan represents a ban in the live chat.
@@ -523,6 +570,8 @@ func cloneMessageSnippet(snippet *MessageSnippet) *MessageSnippet {
 	clone.MessageDeletedDetails = cloneMessageDeletedDetails(snippet.MessageDeletedDetails)
 	clone.UserBannedDetails = cloneUserBannedDetails(snippet.UserBannedDetails)
 	clone.PollDetails = clonePollDetails(snippet.PollDetails)
+	clone.ActivePollItem = snippet.ActivePollItem.Clone()
+	clone.FanFundingEventDetails = cloneFanFundingEventDetails(snippet.FanFundingEventDetails)
 	return &clone
 }
 
@@ -634,6 +683,14 @@ func clonePollDetails(details *PollDetails) *PollDetails {
 		copy(choices, details.Choices)
 		clone.Choices = choices
 	}
+	return &clone
+}
+
+func cloneFanFundingEventDetails(details *FanFundingEventDetails) *FanFundingEventDetails {
+	if details == nil {
+		return nil
+	}
+	clone := *details
 	return &clone
 }
 

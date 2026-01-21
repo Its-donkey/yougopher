@@ -1,60 +1,34 @@
 ---
 layout: default
-title: Live Streaming API Reference
-description: API reference for YouTube Live Streaming API resources and methods
+title: Live Streaming
+description: YouTube Live Streaming API with Yougopher
 ---
 
-API reference documentation for the YouTube Live Streaming API, following the structure of [Google's official documentation](https://developers.google.com/youtube/v3/live/docs).
+The `youtube/streaming` package provides a complete implementation for YouTube Live Streaming.
 
 ## Resources
 
-| Resource | Description |
-|----------|-------------|
-| [liveBroadcasts](LiveBroadcasts/) | A broadcast represents the event being streamed to YouTube. |
-| [liveStreams](LiveStreams/) | A stream is the video feed sent to YouTube for encoding. |
-| [liveChatMessages](LiveChatMessages/) | Messages sent by viewers during a live broadcast. |
-| [liveChatBans](LiveChatBans/) | Ban users from participating in live chat. |
-| [liveChatModerators](LiveChatModerators/) | Moderators who can delete messages and ban users. |
-| [superChatEvents](SuperChatEvents/) | Super Chat and Super Sticker monetary contributions. |
+YouTube Live Streaming API endpoints available through Yougopher.
 
-## Yougopher Implementation
+| Resource | Methods | Description |
+|----------|---------|-------------|
+| [LiveBroadcasts](LiveBroadcasts/) | list, insert, update, delete, bind, transition, cuepoint | Broadcast events that appear on your channel. Bind to streams, transition through states (testing → live → complete), insert ad breaks. |
+| [LiveStreams](LiveStreams/) | list, insert, update, delete | Video streams containing RTMP/RTMPS ingestion URLs and stream keys for OBS or other encoders. |
+| [LiveChatMessages](LiveChatMessages/) | list, insert, delete | Chat messages including text, Super Chats, Super Stickers, memberships, and polls. |
+| [LiveChatBans](LiveChatBans/) | insert, delete | Temporary timeouts or permanent bans for chat users. |
+| [LiveChatModerators](LiveChatModerators/) | list, insert, delete | Grant and revoke moderator privileges for chat users. |
+| [SuperChatEvents](SuperChatEvents/) | list | Monetary contributions (Super Chats and Super Stickers) with amounts and messages. |
 
-Each resource documentation includes:
-1. **Overview** - Resource representation, properties table
-2. **Methods** - API reference with request/response format, parameters, errors
-3. **Yougopher Examples** - Go code examples
+## Types
 
-### Key Types
+Go structs and clients exported by the `streaming` package.
 
-| Yougopher Type | API Resource |
-|---------------|--------------|
-| `streaming.LiveBroadcast` | liveBroadcast |
-| `streaming.LiveStream` | liveStream |
-| `streaming.LiveChatMessage` | liveChatMessage |
-| `streaming.LiveChatBan` | liveChatBan |
-| `streaming.LiveChatModerator` | liveChatModerator |
-| `streaming.LiveChatPoller` | liveChatMessages polling client |
-| `streaming.LiveChatStream` | liveChatMessages SSE client |
-| `streaming.ChatBotClient` | High-level chat bot |
-| `streaming.StreamController` | High-level broadcast manager |
-
-### Quick Start
-
-```go
-import (
-    "github.com/Its-donkey/yougopher/youtube/core"
-    "github.com/Its-donkey/yougopher/youtube/streaming"
-)
-
-// Create client
-client := core.NewClient(core.WithAPIKey("your-api-key"))
-
-// For authenticated requests
-client := core.NewClient()
-client.SetAccessToken("your-oauth-token")
-```
-
-## Related Documentation
-
-- [Streaming Package](../streaming) - High-level overview and ChatBotClient documentation
-- [Google Live Streaming API](https://developers.google.com/youtube/v3/live/docs) - Official API documentation
+| Type | Description |
+|------|-------------|
+| `LiveBroadcast` | Represents a broadcast event with snippet (title, description, scheduled time), status (privacy, life cycle), content details (bound stream, monitor stream), and statistics. |
+| `LiveStream` | Contains CDN settings (ingestion type, resolution, frame rate), ingestion info (RTMP URLs, stream key), and health status. |
+| `LiveChatMessage` | Message with author details, snippet (message text, type), and type-specific data (Super Chat amount, poll choices, etc.). |
+| `LiveChatPoller` | Client that polls for new messages at the API-recommended interval. Supports callbacks for messages, Super Chats, bans, and deletions. |
+| `LiveChatStream` | SSE-based client for real-time message streaming without polling. Lower latency than polling. |
+| `ChatBotClient` | High-level client combining polling, message sending, and command handling for chat bots. |
+| `StreamController` | High-level client for managing the full broadcast lifecycle: create, bind, transition, and monitor. |
