@@ -80,13 +80,6 @@ streaming.CuepointInsertImmediate // -1 - Insert immediately
 - **Monetization enabled**: Channel must have monetization enabled
 - **Not all viewers see ads**: YouTube Premium subscribers don't see ads
 
-## Best Practices
-
-1. **Announce breaks**: Tell viewers an ad break is coming
-2. **30-90 second duration**: Standard ad break length
-3. **Limit frequency**: No more than 4-5 breaks per hour
-4. **Natural pause points**: Insert during content transitions
-
 ## Common Errors
 
 | Error | Description |

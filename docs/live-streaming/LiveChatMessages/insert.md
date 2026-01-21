@@ -61,10 +61,10 @@ if err != nil {
 
 ## Best Practices
 
-1. **Don't spam**: Limit message frequency
+1. **Limit message frequency**: Implement rate limiting to avoid API throttling
 2. **Check chat state**: Verify chat is active before sending
-3. **Handle rate limits**: Implement backoff when rate limited
-4. **Respect slow mode**: Check if slow mode is enabled and wait
+3. **Handle rate limits**: Implement exponential backoff when rate limited
+4. **Respect slow mode**: Check if slow mode is enabled and wait accordingly
 
 ## Common Errors
 

@@ -128,6 +128,13 @@
                 <li><a href="{{ '/live-streaming/SuperChatEvents/list' | relative_url }}">list</a></li>
               </ul>
             </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/examples/' | relative_url }}" class="expandable-toggle">Examples</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/examples/chatbot' | relative_url }}">chatbot</a></li>
+                <li><a href="{{ '/live-streaming/examples/modbot' | relative_url }}">modbot</a></li>
+              </ul>
+            </li>
           </ul>
         </div>
 
@@ -196,9 +203,12 @@
     const currentPath = window.location.pathname;
     document.querySelectorAll('.sidebar a').forEach(link => {
       const href = link.getAttribute('href');
-      if (href === currentPath || currentPath.startsWith(href.replace(/\/$/, '') + '/')) {
+      // Only highlight exact matches
+      if (href === currentPath) {
         link.classList.add('active');
-        // Auto-expand parent if this is a sub-nav item
+      }
+      // Auto-expand parent if current path is within this section
+      if (href === currentPath || currentPath.startsWith(href.replace(/\/$/, '') + '/')) {
         const parentExpandable = link.closest('.expandable');
         if (parentExpandable) {
           parentExpandable.classList.add('expanded');

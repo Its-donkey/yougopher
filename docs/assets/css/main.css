@@ -416,6 +416,10 @@ blockquote {
     display: none;
   }
 
+  .navbar-search {
+    display: none;
+  }
+
   .main-content {
     margin-left: 0;
     max-width: 100%;
@@ -485,9 +489,11 @@ blockquote {
 
 /* Search Box in Navbar */
 .navbar-search {
+  position: absolute;
+  left: var(--sidebar-width);
   display: flex;
   align-items: center;
-  margin-right: var(--spacing-lg);
+  padding-left: var(--spacing-2xl);
 }
 
 .navbar-search-input {
