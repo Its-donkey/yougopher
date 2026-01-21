@@ -88,6 +88,9 @@ a:hover {
   font-weight: 600;
   font-size: 1.125rem;
   text-decoration: none;
+  width: var(--sidebar-width);
+  padding-left: var(--spacing-lg);
+  margin-left: calc(-1 * var(--spacing-lg));
 }
 
 .navbar-brand:hover {
@@ -418,6 +421,12 @@ blockquote {
 
   .navbar-search {
     display: none;
+  }
+
+  .navbar-brand {
+    width: auto;
+    padding-left: 0;
+    margin-left: 0;
   }
 
   .main-content {
