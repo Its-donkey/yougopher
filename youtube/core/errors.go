@@ -67,6 +67,26 @@ func (e *APIError) IsForbidden() bool {
 	return e.StatusCode == 403 || e.Code == "forbidden"
 }
 
+// IsChatEnded returns true if this error indicates the live chat has ended.
+func (e *APIError) IsChatEnded() bool {
+	switch e.Code {
+	case "liveChatEnded", "liveStreamingNotEnabled":
+		return true
+	default:
+		return false
+	}
+}
+
+// IsChatDisabled returns true if this error indicates live chat is disabled.
+func (e *APIError) IsChatDisabled() bool {
+	switch e.Code {
+	case "liveChatDisabled", "liveChatNotEnabled":
+		return true
+	default:
+		return false
+	}
+}
+
 // QuotaError indicates the daily API quota has been exceeded.
 // YouTube API quotas reset at midnight Pacific Time.
 type QuotaError struct {
@@ -119,6 +139,52 @@ type ChatEndedError struct {
 
 func (e *ChatEndedError) Error() string {
 	return fmt.Sprintf("youtube api: live chat ended: %s", e.LiveChatID)
+}
+
+// NotFoundError indicates a requested resource was not found.
+type NotFoundError struct {
+	ResourceType string // e.g., "video", "channel", "playlist"
+	ResourceID   string
+}
+
+func (e *NotFoundError) Error() string {
+	return fmt.Sprintf("youtube api: %s not found: %s", e.ResourceType, e.ResourceID)
+}
+
+// InvalidTransitionError indicates an invalid broadcast state transition.
+type InvalidTransitionError struct {
+	BroadcastID    string
+	CurrentState   string
+	RequestedState string
+}
+
+func (e *InvalidTransitionError) Error() string {
+	return fmt.Sprintf("youtube api: invalid transition for broadcast %s: cannot transition from %s to %s",
+		e.BroadcastID, e.CurrentState, e.RequestedState)
+}
+
+// StreamNotHealthyError indicates the stream is not ready for broadcast.
+type StreamNotHealthyError struct {
+	StreamID string
+	Status   string
+	Issues   []string
+}
+
+func (e *StreamNotHealthyError) Error() string {
+	if len(e.Issues) > 0 {
+		return fmt.Sprintf("youtube api: stream %s is not healthy (status: %s): %v",
+			e.StreamID, e.Status, e.Issues)
+	}
+	return fmt.Sprintf("youtube api: stream %s is not healthy (status: %s)", e.StreamID, e.Status)
+}
+
+// StreamNotBoundError indicates no stream is bound to the broadcast.
+type StreamNotBoundError struct {
+	BroadcastID string
+}
+
+func (e *StreamNotBoundError) Error() string {
+	return fmt.Sprintf("youtube api: broadcast %s has no bound stream", e.BroadcastID)
 }
 
 // BackoffConfig configures exponential backoff with jitter for retry logic.
