@@ -85,8 +85,9 @@ a:hover {
   align-items: center;
   gap: var(--spacing-sm);
   color: #fff;
-  font-weight: 700;
-  font-size: 1.25rem;
+  font-weight: 600;
+  font-size: 1.125rem;
+  text-decoration: none;
 }
 
 .navbar-brand:hover {
@@ -95,12 +96,14 @@ a:hover {
 }
 
 .logo-text {
-  color: var(--color-primary);
+  color: #fff;
 }
 
 .navbar-logo {
-  height: 32px;
-  width: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .navbar-links {
