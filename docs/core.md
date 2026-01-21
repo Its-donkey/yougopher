@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Core API
-description: HTTP client, quota tracking, and error handling for YouTube API.
+description: HTTP client, quota tracking, caching, and middleware for YouTube API.
 ---
 
 ## Overview
@@ -17,6 +17,17 @@ Foundation components for YouTube API interactions:
 - Track usage by operation type
 - Set limits and receive alerts
 - Automatic daily reset (Pacific midnight)
+
+**Cache:** In-memory caching with TTL
+- Configurable TTL and max items
+- Atomic get-or-set operations
+- Automatic expired entry eviction
+
+**Middleware:** Request/response pipeline
+- Logging with timing
+- Retry with exponential backoff
+- Metrics collection
+- Rate limiting
 
 **Errors:** Typed error responses
 - Quota exceeded detection
@@ -255,6 +266,172 @@ var (
     core.ErrAlreadyRunning // Operation already in progress
     core.ErrNotRunning     // Operation not running
 )
+```
+
+## Cache
+
+In-memory caching with TTL (time-to-live) support.
+
+### NewCache
+
+Create a cache with optional configuration.
+
+```go
+cache := core.NewCache(
+    core.WithDefaultTTL(5 * time.Minute),
+    core.WithMaxItems(1000),
+)
+```
+
+### Basic Operations
+
+```go
+// Set with default TTL
+cache.Set("video:abc123", videoData)
+
+// Set with custom TTL
+cache.SetWithTTL("search:query", results, 1*time.Hour)
+
+// Get
+val, ok := cache.Get("video:abc123")
+if ok {
+    video := val.(*Video)
+}
+
+// Delete
+cache.Delete("video:abc123")
+
+// Clear all
+cache.Clear()
+```
+
+### GetOrSet
+
+Atomically get a value or compute it if missing/expired.
+
+```go
+val, err := cache.GetOrSet("expensive:key", func() (any, error) {
+    // Only called if key is missing or expired
+    return computeExpensiveValue()
+})
+```
+
+### Cache Statistics
+
+```go
+stats := cache.Stats()
+fmt.Printf("Total: %d, Active: %d, Expired: %d\n",
+    stats.Items, stats.Active, stats.Expired)
+```
+
+### Cleanup
+
+Remove expired entries manually (also happens automatically on insert).
+
+```go
+removed := cache.Cleanup()
+fmt.Printf("Removed %d expired entries\n", removed)
+```
+
+## Middleware
+
+Middleware wraps request execution with additional behavior.
+
+### MiddlewareChain
+
+Combine multiple middlewares.
+
+```go
+chain := core.MiddlewareChain(
+    core.NewLoggingMiddleware(),
+    core.NewRetryMiddleware(),
+    metricsMW,
+)
+```
+
+### LoggingMiddleware
+
+Log requests and response times.
+
+```go
+loggingMW := core.NewLoggingMiddleware(
+    core.WithLogger(myLogger),    // Custom logger
+    core.WithLogTiming(true),     // Log durations
+    core.WithLogBody(false),      // Don't log request bodies
+)
+```
+
+### RetryMiddleware
+
+Retry failed requests with exponential backoff.
+
+```go
+retryMW := core.NewRetryMiddleware(
+    core.WithMaxRetries(3),
+    core.WithRetryBackoff(&core.BackoffConfig{
+        BaseDelay:  1 * time.Second,
+        MaxDelay:   30 * time.Second,
+        Multiplier: 2.0,
+        Jitter:     0.1,
+    }),
+    core.WithShouldRetry(func(err error) bool {
+        // Custom retry logic
+        var rle *core.RateLimitError
+        return errors.As(err, &rle)
+    }),
+)
+```
+
+### MetricsMiddleware
+
+Track request counts and durations.
+
+```go
+metrics, metricsMW := core.NewMetricsMiddleware()
+
+// Use middleware...
+
+// Check stats
+fmt.Printf("Total requests: %d\n", metrics.TotalRequests())
+fmt.Printf("Failed requests: %d\n", metrics.FailedRequests())
+fmt.Printf("Successful: %d\n", metrics.SuccessfulRequests())
+fmt.Printf("Average duration: %v\n", metrics.AverageDuration())
+
+// Reset stats
+metrics.Reset()
+```
+
+### RateLimitingMiddleware
+
+Limit outgoing request rate.
+
+```go
+rateLimitMW := core.NewRateLimitingMiddleware(
+    core.WithRequestsPerSecond(10), // Max 10 requests/second
+)
+```
+
+### Custom Middleware
+
+Create your own middleware:
+
+```go
+func MyMiddleware() core.Middleware {
+    return func(ctx context.Context, req *core.Request, next func(context.Context, *core.Request) error) error {
+        // Before request
+        log.Printf("Starting %s %s", req.Method, req.Path)
+
+        // Execute request
+        err := next(ctx, req)
+
+        // After request
+        if err != nil {
+            log.Printf("Request failed: %v", err)
+        }
+
+        return err
+    }
+}
 ```
 
 ## Thread Safety
