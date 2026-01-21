@@ -160,14 +160,16 @@ a:hover {
 
 /* Sidebar */
 .sidebar {
-  position: fixed;
+  position: sticky;
   top: var(--navbar-height);
-  right: 0;
   width: var(--sidebar-width);
   height: calc(100vh - var(--navbar-height));
+  flex-shrink: 0;
   background: var(--color-bg-secondary);
   border-left: 1px solid var(--color-border);
   overflow-y: auto;
+  order: 1;
+  align-self: flex-start;
 }
 
 .sidebar-content {
@@ -253,9 +255,8 @@ a:hover {
 /* Main Content */
 .main-content {
   flex: 1;
-  margin-right: var(--sidebar-width);
   padding: var(--spacing-2xl);
-  max-width: calc(100% - var(--sidebar-width));
+  min-width: 0;
   min-height: calc(100vh - var(--navbar-height));
 }
 
@@ -369,7 +370,6 @@ blockquote {
   background: var(--color-footer);
   color: rgba(255,255,255,0.9);
   padding: var(--spacing-2xl) var(--spacing-lg);
-  margin-right: var(--sidebar-width);
 }
 
 .footer-container {
@@ -410,11 +410,7 @@ blockquote {
 }
 
 .footer-bottom {
-  position: relative;
-  z-index: 1001;
-  width: 100%;
   padding: var(--spacing-lg);
-  background: var(--color-footer);
   border-top: 1px solid rgba(255,255,255,0.1);
   text-align: center;
   font-size: 0.875rem;
@@ -435,15 +431,6 @@ blockquote {
 @media (max-width: 1024px) {
   .sidebar {
     display: none;
-  }
-
-  .main-content {
-    margin-right: 0;
-    max-width: 100%;
-  }
-
-  .footer {
-    margin-right: 0;
   }
 }
 
