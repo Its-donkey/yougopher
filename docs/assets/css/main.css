@@ -256,6 +256,7 @@ a:hover {
   margin-right: var(--sidebar-width);
   padding: var(--spacing-2xl);
   max-width: calc(100% - var(--sidebar-width));
+  min-height: calc(100vh - var(--navbar-height));
 }
 
 .content {
