@@ -636,3 +636,186 @@ func clonePollDetails(details *PollDetails) *PollDetails {
 	}
 	return &clone
 }
+
+// LiveChatModeratorListResponse is the response from liveChatModerators.list.
+type LiveChatModeratorListResponse struct {
+	// Kind identifies the resource type.
+	Kind string `json:"kind,omitempty"`
+
+	// ETag for caching.
+	ETag string `json:"etag,omitempty"`
+
+	// NextPageToken for pagination.
+	NextPageToken string `json:"nextPageToken,omitempty"`
+
+	// PageInfo contains pagination metadata.
+	PageInfo *PageInfo `json:"pageInfo,omitempty"`
+
+	// Items contains the moderators.
+	Items []*LiveChatModerator `json:"items,omitempty"`
+}
+
+// SuperChatEventResource represents a Super Chat or Super Sticker event from the API.
+// This is the raw API resource type; for the high-level event used by ChatBotClient,
+// see SuperChatEvent in chat.go.
+type SuperChatEventResource struct {
+	// Kind identifies the resource type.
+	Kind string `json:"kind,omitempty"`
+
+	// ETag for caching.
+	ETag string `json:"etag,omitempty"`
+
+	// ID is the unique identifier for this event.
+	ID string `json:"id,omitempty"`
+
+	// Snippet contains event metadata.
+	Snippet *SuperChatEventResourceSnippet `json:"snippet,omitempty"`
+}
+
+// SuperChatEventResourceSnippet contains Super Chat event details from the API.
+type SuperChatEventResourceSnippet struct {
+	// ChannelID is the channel that received the Super Chat.
+	ChannelID string `json:"channelId,omitempty"`
+
+	// SupporterDetails contains information about the supporter.
+	SupporterDetails *SupporterDetails `json:"supporterDetails,omitempty"`
+
+	// CommentText is the optional message from the supporter.
+	CommentText string `json:"commentText,omitempty"`
+
+	// CreatedAt is when the Super Chat was created.
+	CreatedAt time.Time `json:"createdAt,omitempty"`
+
+	// AmountMicros is the donation amount in micros.
+	AmountMicros int64 `json:"amountMicros,omitempty,string"`
+
+	// Currency is the ISO 4217 currency code.
+	Currency string `json:"currency,omitempty"`
+
+	// DisplayString is the formatted donation amount.
+	DisplayString string `json:"displayString,omitempty"`
+
+	// MessageType indicates if this is a Super Chat or Super Sticker.
+	// Values: "superChatEvent" or "superStickerEvent"
+	MessageType string `json:"messageType,omitempty"`
+
+	// SuperStickerMetadata is present for Super Sticker events.
+	SuperStickerMetadata *SuperStickerMetadata `json:"superStickerMetadata,omitempty"`
+
+	// IsSuperStickerEvent returns true if this is a Super Sticker.
+	IsSuperStickerEvent bool `json:"isSuperStickerEvent,omitempty"`
+}
+
+// SupporterDetails contains information about a Super Chat supporter.
+type SupporterDetails struct {
+	// ChannelID is the supporter's channel ID.
+	ChannelID string `json:"channelId,omitempty"`
+
+	// ChannelURL is the supporter's channel URL.
+	ChannelURL string `json:"channelUrl,omitempty"`
+
+	// DisplayName is the supporter's display name.
+	DisplayName string `json:"displayName,omitempty"`
+
+	// ProfileImageURL is the supporter's profile image URL.
+	ProfileImageURL string `json:"profileImageUrl,omitempty"`
+}
+
+// SuperChatEventResourceListResponse is the response from superChatEvents.list.
+type SuperChatEventResourceListResponse struct {
+	// Kind identifies the resource type.
+	Kind string `json:"kind,omitempty"`
+
+	// ETag for caching.
+	ETag string `json:"etag,omitempty"`
+
+	// NextPageToken for pagination.
+	NextPageToken string `json:"nextPageToken,omitempty"`
+
+	// PageInfo contains pagination metadata.
+	PageInfo *PageInfo `json:"pageInfo,omitempty"`
+
+	// Items contains the Super Chat events.
+	Items []*SuperChatEventResource `json:"items,omitempty"`
+}
+
+// Cuepoint represents an ad break cuepoint in a live broadcast.
+type Cuepoint struct {
+	// Kind identifies the resource type.
+	Kind string `json:"kind,omitempty"`
+
+	// ETag for caching.
+	ETag string `json:"etag,omitempty"`
+
+	// ID is the unique identifier for this cuepoint.
+	ID string `json:"id,omitempty"`
+
+	// CueType indicates the type of cuepoint.
+	// Value is always "cueTypeAd" for ad breaks.
+	CueType string `json:"cueType,omitempty"`
+
+	// DurationSecs is the ad break duration in seconds.
+	// Default is 30 seconds if not specified.
+	DurationSecs int `json:"durationSecs,omitempty"`
+
+	// InsertionOffsetTimeMs is when the cuepoint should be inserted.
+	// Use -1 for immediate insertion.
+	InsertionOffsetTimeMs int64 `json:"insertionOffsetTimeMs,omitempty,string"`
+
+	// WalltimeMs is the wall clock time when the cuepoint should be inserted.
+	// Alternative to InsertionOffsetTimeMs.
+	WalltimeMs int64 `json:"walltimeMs,omitempty,string"`
+}
+
+// CuepointRequest is the request body for inserting a cuepoint.
+type CuepointRequest struct {
+	// CueType is always "cueTypeAd" for ad breaks.
+	CueType string `json:"cueType"`
+
+	// DurationSecs is the ad break duration (default 30).
+	DurationSecs int `json:"durationSecs,omitempty"`
+
+	// InsertionOffsetTimeMs is when to insert (-1 for immediate).
+	InsertionOffsetTimeMs int64 `json:"insertionOffsetTimeMs,omitempty,string"`
+
+	// WalltimeMs is alternative wall clock time for insertion.
+	WalltimeMs int64 `json:"walltimeMs,omitempty,string"`
+}
+
+// CueType constants.
+const (
+	CueTypeAd = "cueTypeAd"
+)
+
+// Chat mode constants for liveChatMessages.transition.
+const (
+	// ChatModeSubscribersOnly restricts chat to channel subscribers.
+	ChatModeSubscribersOnly = "subscribersOnlyMode"
+
+	// ChatModeMembersOnly restricts chat to channel members.
+	ChatModeMembersOnly = "membersOnlyMode"
+
+	// ChatModeSlowMode enables slow mode with a delay between messages.
+	ChatModeSlowMode = "slowMode"
+
+	// ChatModeNormal is normal chat mode with no restrictions.
+	ChatModeNormal = "normal"
+)
+
+// TransitionChatModeRequest is the request body for changing chat mode.
+type TransitionChatModeRequest struct {
+	Snippet *TransitionChatModeSnippet `json:"snippet"`
+}
+
+// TransitionChatModeSnippet contains chat mode transition details.
+type TransitionChatModeSnippet struct {
+	// LiveChatID is the ID of the live chat.
+	LiveChatID string `json:"liveChatId"`
+
+	// Type specifies the new chat mode.
+	Type string `json:"type"`
+
+	// SlowModeDelayMs is the delay between messages in slow mode (milliseconds).
+	// Only used when Type is ChatModeSlowMode.
+	SlowModeDelayMs int64 `json:"slowModeDelayMs,omitempty"`
+}

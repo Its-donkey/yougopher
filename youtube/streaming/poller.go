@@ -741,6 +741,78 @@ func (p *LiveChatPoller) RemoveModerator(ctx context.Context, moderatorID string
 	return nil
 }
 
+// ListModeratorsParams contains parameters for listing moderators.
+type ListModeratorsParams struct {
+	// MaxResults is the maximum number of items to return (1-50, default 5).
+	MaxResults int
+
+	// PageToken for pagination.
+	PageToken string
+}
+
+// ListModerators retrieves the moderators for the live chat.
+// Costs 50 quota units.
+func (p *LiveChatPoller) ListModerators(ctx context.Context, params *ListModeratorsParams) (*LiveChatModeratorListResponse, error) {
+	query := url.Values{
+		"liveChatId": {p.liveChatID},
+		"part":       {"id,snippet"},
+	}
+
+	if params != nil {
+		if params.MaxResults > 0 {
+			query.Set("maxResults", fmt.Sprintf("%d", params.MaxResults))
+		}
+		if params.PageToken != "" {
+			query.Set("pageToken", params.PageToken)
+		}
+	}
+
+	var resp LiveChatModeratorListResponse
+	err := p.client.Get(ctx, "liveChat/moderators", query, "liveChatModerators.list", &resp)
+	if err != nil {
+		return nil, fmt.Errorf("listing moderators: %w", err)
+	}
+
+	return &resp, nil
+}
+
+// TransitionChatMode changes the chat mode for the live chat.
+// Valid modes: ChatModeSubscribersOnly, ChatModeMembersOnly, ChatModeSlowMode, ChatModeNormal.
+// For slow mode, use TransitionChatModeWithDelay to specify the delay.
+// Costs 50 quota units.
+func (p *LiveChatPoller) TransitionChatMode(ctx context.Context, mode string) error {
+	return p.TransitionChatModeWithDelay(ctx, mode, 0)
+}
+
+// TransitionChatModeWithDelay changes the chat mode with an optional slow mode delay.
+// The delayMs parameter is only used when mode is ChatModeSlowMode.
+// Costs 50 quota units.
+func (p *LiveChatPoller) TransitionChatModeWithDelay(ctx context.Context, mode string, delayMs int64) error {
+	if mode == "" {
+		return errors.New("mode cannot be empty")
+	}
+
+	req := &TransitionChatModeRequest{
+		Snippet: &TransitionChatModeSnippet{
+			LiveChatID: p.liveChatID,
+			Type:       mode,
+		},
+	}
+
+	if mode == ChatModeSlowMode && delayMs > 0 {
+		req.Snippet.SlowModeDelayMs = delayMs
+	}
+
+	query := url.Values{"part": {"snippet"}}
+
+	err := p.client.Post(ctx, "liveChat/messages/transition", query, req, "liveChatMessages.transition", nil)
+	if err != nil {
+		return fmt.Errorf("transitioning chat mode: %w", err)
+	}
+
+	return nil
+}
+
 // PollInterval returns the current poll interval.
 func (p *LiveChatPoller) PollInterval() time.Duration {
 	p.mu.RLock()
@@ -782,4 +854,52 @@ func (p *LiveChatPoller) Reset() error {
 	p.pageToken = ""
 	p.pollInterval = 0
 	return nil
+}
+
+// ListSuperChatEventsParams contains parameters for listing Super Chat events.
+type ListSuperChatEventsParams struct {
+	// HL specifies the language for localized resource properties.
+	// See https://developers.google.com/youtube/v3/docs/i18nLanguages
+	HL string
+
+	// MaxResults is the maximum number of items to return (1-50, default 5).
+	MaxResults int
+
+	// PageToken for pagination.
+	PageToken string
+}
+
+// ListSuperChatEvents retrieves Super Chat and Super Sticker events for the
+// authenticated user's channel. This provides historical data about Super Chats
+// received, not real-time events.
+//
+// For real-time Super Chat notifications during a live stream, use the
+// ChatBotClient's OnSuperChat handler instead.
+//
+// Requires OAuth authentication with youtube.readonly or youtube.force-ssl scope.
+// Quota cost: 5 units.
+func ListSuperChatEvents(ctx context.Context, client *core.Client, params *ListSuperChatEventsParams) (*SuperChatEventResourceListResponse, error) {
+	query := url.Values{
+		"part": {"id,snippet"},
+	}
+
+	if params != nil {
+		if params.HL != "" {
+			query.Set("hl", params.HL)
+		}
+		if params.MaxResults > 0 {
+			query.Set("maxResults", fmt.Sprintf("%d", params.MaxResults))
+		}
+		if params.PageToken != "" {
+			query.Set("pageToken", params.PageToken)
+		}
+	}
+
+	var resp SuperChatEventResourceListResponse
+	err := client.Get(ctx, "superChatEvents", query, "superChatEvents.list", &resp)
+	if err != nil {
+		return nil, fmt.Errorf("listing super chat events: %w", err)
+	}
+
+	return &resp, nil
 }

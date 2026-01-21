@@ -608,3 +608,149 @@ func TestPollStatusConstants(t *testing.T) {
 		t.Errorf("PollStatusClosed = %q, want 'closed'", PollStatusClosed)
 	}
 }
+
+func TestLiveChatMessage_Clone_SuperSticker(t *testing.T) {
+	original := &LiveChatMessage{
+		ID: "sticker123",
+		Snippet: &MessageSnippet{
+			Type: MessageTypeSuperSticker,
+			SuperStickerDetails: &SuperStickerDetails{
+				SuperStickerID: "sticker-001",
+				SuperStickerMetadata: &SuperStickerMetadata{
+					StickerID: "meta-001",
+					AltText:   "Happy sticker",
+				},
+				AmountMicros:        1000000,
+				Currency:            "USD",
+				AmountDisplayString: "$1.00",
+				Tier:                1,
+			},
+		},
+	}
+
+	clone := original.Clone()
+	if clone == original {
+		t.Error("Clone() returned same pointer")
+	}
+	if clone.Snippet.SuperStickerDetails == original.Snippet.SuperStickerDetails {
+		t.Error("Clone() did not deep copy SuperStickerDetails")
+	}
+	if clone.Snippet.SuperStickerDetails.SuperStickerMetadata == original.Snippet.SuperStickerDetails.SuperStickerMetadata {
+		t.Error("Clone() did not deep copy SuperStickerMetadata")
+	}
+	if clone.Snippet.SuperStickerDetails.SuperStickerID != "sticker-001" {
+		t.Errorf("SuperStickerID = %q, want 'sticker-001'", clone.Snippet.SuperStickerDetails.SuperStickerID)
+	}
+	if clone.Snippet.SuperStickerDetails.SuperStickerMetadata.AltText != "Happy sticker" {
+		t.Errorf("AltText = %q, want 'Happy sticker'", clone.Snippet.SuperStickerDetails.SuperStickerMetadata.AltText)
+	}
+
+	// Modify clone and verify original unchanged
+	clone.Snippet.SuperStickerDetails.SuperStickerMetadata.AltText = "modified"
+	if original.Snippet.SuperStickerDetails.SuperStickerMetadata.AltText == "modified" {
+		t.Error("Clone() did not create deep copy of SuperStickerMetadata")
+	}
+}
+
+func TestLiveChatMessage_Clone_UserBanned(t *testing.T) {
+	original := &LiveChatMessage{
+		ID: "ban123",
+		Snippet: &MessageSnippet{
+			Type: MessageTypeUserBanned,
+			UserBannedDetails: &UserBannedDetails{
+				BannedUserDetails: &BannedUserDetails{
+					ChannelID:       "banned-channel",
+					ChannelURL:      "https://youtube.com/channel/banned",
+					DisplayName:     "Banned User",
+					ProfileImageURL: "https://example.com/image.png",
+				},
+				BanType:            BanTypeTemporary,
+				BanDurationSeconds: 300,
+			},
+		},
+	}
+
+	clone := original.Clone()
+	if clone == original {
+		t.Error("Clone() returned same pointer")
+	}
+	if clone.Snippet.UserBannedDetails == original.Snippet.UserBannedDetails {
+		t.Error("Clone() did not deep copy UserBannedDetails")
+	}
+	if clone.Snippet.UserBannedDetails.BannedUserDetails == original.Snippet.UserBannedDetails.BannedUserDetails {
+		t.Error("Clone() did not deep copy BannedUserDetails")
+	}
+	if clone.Snippet.UserBannedDetails.BanType != BanTypeTemporary {
+		t.Errorf("BanType = %q, want %q", clone.Snippet.UserBannedDetails.BanType, BanTypeTemporary)
+	}
+	if clone.Snippet.UserBannedDetails.BannedUserDetails.DisplayName != "Banned User" {
+		t.Errorf("DisplayName = %q, want 'Banned User'", clone.Snippet.UserBannedDetails.BannedUserDetails.DisplayName)
+	}
+
+	// Modify clone and verify original unchanged
+	clone.Snippet.UserBannedDetails.BannedUserDetails.DisplayName = "modified"
+	if original.Snippet.UserBannedDetails.BannedUserDetails.DisplayName == "modified" {
+		t.Error("Clone() did not create deep copy of BannedUserDetails")
+	}
+}
+
+func TestLiveChatMessage_Clone_Poll(t *testing.T) {
+	original := &LiveChatMessage{
+		ID: "poll123",
+		Snippet: &MessageSnippet{
+			Type: MessageTypePoll,
+			PollDetails: &PollDetails{
+				Question: "Favorite color?",
+				Status:   PollStatusOpen,
+				Choices: []PollChoice{
+					{ChoiceID: "a", Text: "Red", NumVotes: 10},
+					{ChoiceID: "b", Text: "Blue", NumVotes: 15},
+					{ChoiceID: "c", Text: "Green", NumVotes: 5},
+				},
+			},
+		},
+	}
+
+	clone := original.Clone()
+	if clone == original {
+		t.Error("Clone() returned same pointer")
+	}
+	if clone.Snippet.PollDetails == original.Snippet.PollDetails {
+		t.Error("Clone() did not deep copy PollDetails")
+	}
+	if len(clone.Snippet.PollDetails.Choices) != 3 {
+		t.Errorf("len(Choices) = %d, want 3", len(clone.Snippet.PollDetails.Choices))
+	}
+	if clone.Snippet.PollDetails.Question != "Favorite color?" {
+		t.Errorf("Question = %q, want 'Favorite color?'", clone.Snippet.PollDetails.Question)
+	}
+	if clone.Snippet.PollDetails.Choices[1].Text != "Blue" {
+		t.Errorf("Choices[1].Text = %q, want 'Blue'", clone.Snippet.PollDetails.Choices[1].Text)
+	}
+
+	// Modify clone's choices and verify original unchanged
+	clone.Snippet.PollDetails.Choices[0].Text = "modified"
+	if original.Snippet.PollDetails.Choices[0].Text == "modified" {
+		t.Error("Clone() did not create deep copy of Choices slice")
+	}
+}
+
+func TestLiveChatMessage_Clone_EmptyPollChoices(t *testing.T) {
+	// Test poll with empty choices slice
+	original := &LiveChatMessage{
+		ID: "poll-empty",
+		Snippet: &MessageSnippet{
+			Type: MessageTypePoll,
+			PollDetails: &PollDetails{
+				Question: "Empty poll",
+				Status:   PollStatusOpen,
+				Choices:  nil,
+			},
+		},
+	}
+
+	clone := original.Clone()
+	if clone.Snippet.PollDetails.Choices != nil {
+		t.Errorf("Choices = %v, want nil", clone.Snippet.PollDetails.Choices)
+	}
+}
