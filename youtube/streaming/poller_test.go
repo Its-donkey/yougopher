@@ -971,3 +971,239 @@ func TestLiveChatPoller_AllHandlerTypes(t *testing.T) {
 	}
 	poller.handlerMu.RUnlock()
 }
+
+func TestLiveChatPoller_ListModerators(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Errorf("expected GET, got %s", r.Method)
+			}
+			if r.URL.Path != "/liveChat/moderators" {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+			if r.URL.Query().Get("liveChatId") != "chat123" {
+				t.Errorf("unexpected liveChatId: %s", r.URL.Query().Get("liveChatId"))
+			}
+
+			resp := LiveChatModeratorListResponse{
+				Items: []*LiveChatModerator{
+					{
+						ID: "mod123",
+						Snippet: &ModeratorSnippet{
+							LiveChatID: "chat123",
+							ModeratorDetails: &ModeratorDetails{
+								ChannelID:   "channel456",
+								DisplayName: "ModUser",
+							},
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+		poller := NewLiveChatPoller(client, "chat123")
+
+		resp, err := poller.ListModerators(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(resp.Items) != 1 {
+			t.Fatalf("expected 1 moderator, got %d", len(resp.Items))
+		}
+		if resp.Items[0].Snippet.ModeratorDetails.DisplayName != "ModUser" {
+			t.Errorf("unexpected display name: %s", resp.Items[0].Snippet.ModeratorDetails.DisplayName)
+		}
+	})
+
+	t.Run("with params", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("maxResults") != "50" {
+				t.Errorf("unexpected maxResults: %s", r.URL.Query().Get("maxResults"))
+			}
+			if r.URL.Query().Get("pageToken") != "token123" {
+				t.Errorf("unexpected pageToken: %s", r.URL.Query().Get("pageToken"))
+			}
+
+			resp := LiveChatModeratorListResponse{Items: []*LiveChatModerator{}}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+		poller := NewLiveChatPoller(client, "chat123")
+
+		_, err := poller.ListModerators(context.Background(), &ListModeratorsParams{
+			MaxResults: 50,
+			PageToken:  "token123",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestLiveChatPoller_TransitionChatMode(t *testing.T) {
+	t.Run("success subscribers only", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("expected POST, got %s", r.Method)
+			}
+			if r.URL.Path != "/liveChat/messages/transition" {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+
+			var body TransitionChatModeRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode request body: %v", err)
+			}
+			if body.Snippet.LiveChatID != "chat123" {
+				t.Errorf("unexpected liveChatId: %s", body.Snippet.LiveChatID)
+			}
+			if body.Snippet.Type != ChatModeSubscribersOnly {
+				t.Errorf("unexpected type: %s", body.Snippet.Type)
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+		poller := NewLiveChatPoller(client, "chat123")
+
+		err := poller.TransitionChatMode(context.Background(), ChatModeSubscribersOnly)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("slow mode with delay", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body TransitionChatModeRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode request body: %v", err)
+			}
+			if body.Snippet.Type != ChatModeSlowMode {
+				t.Errorf("unexpected type: %s", body.Snippet.Type)
+			}
+			if body.Snippet.SlowModeDelayMs != 5000 {
+				t.Errorf("unexpected slowModeDelayMs: %d", body.Snippet.SlowModeDelayMs)
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+		poller := NewLiveChatPoller(client, "chat123")
+
+		err := poller.TransitionChatModeWithDelay(context.Background(), ChatModeSlowMode, 5000)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("empty mode", func(t *testing.T) {
+		client := core.NewClient()
+		poller := NewLiveChatPoller(client, "chat123")
+
+		err := poller.TransitionChatMode(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty mode")
+		}
+	})
+}
+
+func TestListSuperChatEvents(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Errorf("expected GET, got %s", r.Method)
+			}
+			if r.URL.Path != "/superChatEvents" {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+
+			resp := SuperChatEventResourceListResponse{
+				Items: []*SuperChatEventResource{
+					{
+						ID: "superchat123",
+						Snippet: &SuperChatEventResourceSnippet{
+							ChannelID:     "channel123",
+							DisplayString: "$5.00",
+							AmountMicros:  5000000,
+							Currency:      "USD",
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+
+		resp, err := ListSuperChatEvents(context.Background(), client, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(resp.Items) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(resp.Items))
+		}
+		if resp.Items[0].Snippet.DisplayString != "$5.00" {
+			t.Errorf("unexpected display string: %s", resp.Items[0].Snippet.DisplayString)
+		}
+	})
+
+	t.Run("with params", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("hl") != "en" {
+				t.Errorf("unexpected hl: %s", r.URL.Query().Get("hl"))
+			}
+			if r.URL.Query().Get("maxResults") != "25" {
+				t.Errorf("unexpected maxResults: %s", r.URL.Query().Get("maxResults"))
+			}
+			if r.URL.Query().Get("pageToken") != "token456" {
+				t.Errorf("unexpected pageToken: %s", r.URL.Query().Get("pageToken"))
+			}
+
+			resp := SuperChatEventResourceListResponse{Items: []*SuperChatEventResource{}}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		client := core.NewClient(core.WithBaseURL(server.URL))
+
+		_, err := ListSuperChatEvents(context.Background(), client, &ListSuperChatEventsParams{
+			HL:         "en",
+			MaxResults: 25,
+			PageToken:  "token456",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestChatModeConstants(t *testing.T) {
+	expectedModes := map[string]string{
+		"subscribersOnlyMode": ChatModeSubscribersOnly,
+		"membersOnlyMode":     ChatModeMembersOnly,
+		"slowMode":            ChatModeSlowMode,
+		"normal":              ChatModeNormal,
+	}
+
+	for expected, actual := range expectedModes {
+		if actual != expected {
+			t.Errorf("ChatMode constant %q = %q, want %q", expected, actual, expected)
+		}
+	}
+}
