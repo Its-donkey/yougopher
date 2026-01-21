@@ -13,6 +13,16 @@ Handle OAuth 2.0 authentication for YouTube APIs:
 - Exchange codes for tokens
 - Automatic token refresh
 
+**Device Code Flow:** For limited-input devices
+- TVs, consoles, and CLI applications
+- User enters code on separate device
+- Automatic polling for authorization
+
+**Service Accounts:** Server-to-server authentication
+- JWT-based authentication
+- No user interaction required
+- Domain-wide delegation support
+
 **Token Management:** Secure token handling
 - Thread-safe token storage
 - Automatic refresh before expiry
@@ -270,6 +280,160 @@ func main() {
 }
 ```
 
+## Device Code Flow
+
+For devices with limited input capabilities (TVs, consoles, CLI applications).
+
+### NewDeviceClient
+
+Create a device code flow client.
+
+```go
+deviceClient := auth.NewDeviceClient(auth.DeviceConfig{
+    ClientID: "your-client-id",
+    Scopes:   []string{auth.ScopeLiveChat},
+})
+```
+
+### RequestDeviceCode
+
+Initiate the device authorization flow.
+
+```go
+authResp, err := deviceClient.RequestDeviceCode(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Go to %s\n", authResp.VerificationURL)
+fmt.Printf("Enter code: %s\n", authResp.UserCode)
+fmt.Printf("Code expires in %d seconds\n", authResp.ExpiresIn)
+```
+
+### PollForToken
+
+Poll for authorization (blocking).
+
+```go
+token, err := deviceClient.PollForToken(ctx, authResp)
+if err != nil {
+    var deviceErr *auth.DeviceAuthError
+    if errors.As(err, &deviceErr) {
+        if deviceErr.IsAccessDenied() {
+            log.Println("User denied access")
+        }
+        if deviceErr.IsExpired() {
+            log.Println("Code expired, request new code")
+        }
+    }
+    log.Fatal(err)
+}
+
+fmt.Printf("Authenticated! Access token: %s\n", token.AccessToken)
+```
+
+### PollForTokenAsync
+
+Poll asynchronously with cancel support.
+
+```go
+tokenCh, errCh, cancel := deviceClient.PollForTokenAsync(ctx, authResp)
+
+select {
+case token := <-tokenCh:
+    fmt.Printf("Got token: %s\n", token.AccessToken)
+case err := <-errCh:
+    log.Fatal(err)
+case <-time.After(5 * time.Minute):
+    cancel() // Cancel polling
+    log.Fatal("Timeout waiting for authorization")
+}
+```
+
+## Service Account Authentication
+
+For server-to-server communication without user interaction.
+
+### From JSON Credentials
+
+Load from Google Cloud service account JSON file.
+
+```go
+jsonData, err := os.ReadFile("service-account.json")
+if err != nil {
+    log.Fatal(err)
+}
+
+client, err := auth.NewServiceAccountClientFromJSON(jsonData,
+    []string{auth.ScopeReadOnly, auth.ScopePartner},
+)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### From Config
+
+Create from configuration values.
+
+```go
+client, err := auth.NewServiceAccountClient(auth.ServiceAccountConfig{
+    Email:      "service@project.iam.gserviceaccount.com",
+    PrivateKey: pemEncodedPrivateKey,
+    Scopes:     []string{auth.ScopeReadOnly},
+})
+```
+
+### Options
+
+```go
+client, err := auth.NewServiceAccountClient(config,
+    auth.WithServiceAccountHTTPClient(customHTTPClient),
+    auth.WithServiceAccountRefreshEarly(10*time.Minute),
+    auth.WithSubject("user@domain.com"), // Domain-wide delegation
+    auth.WithServiceAccountOnTokenRefresh(func(token *auth.Token) {
+        log.Println("Token refreshed")
+    }),
+)
+```
+
+### AccessToken
+
+Get a valid access token (fetches new token if needed).
+
+```go
+accessToken, err := client.AccessToken(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+// Use accessToken for API calls
+```
+
+### FetchToken
+
+Explicitly fetch a new token.
+
+```go
+token, err := client.FetchToken(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Auto-Refresh
+
+Service accounts support auto-refresh like OAuth clients.
+
+```go
+err := client.StartAutoRefresh(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Token will be refreshed automatically before expiry
+defer client.StopAutoRefresh()
+```
+
 ## Thread Safety
 
-`AuthClient` is safe for concurrent use. All token operations are protected by mutex locks.
+`AuthClient`, `DeviceClient`, and `ServiceAccountClient` are all safe for concurrent use. All token operations are protected by mutex locks.

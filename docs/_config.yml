@@ -1,0 +1,35 @@
+title: Yougopher
+description: A YouTube API toolkit in Go focused on live chat bot functionality
+url: "https://its-donkey.github.io"
+baseurl: "/yougopher"
+
+markdown: kramdown
+highlighter: rouge
+
+# Build settings
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+
+# Collections for organized content
+collections:
+  live-streaming:
+    output: true
+    permalink: /live-streaming/:path/
+
+# Default frontmatter
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+  - scope:
+      path: "live-streaming"
+    values:
+      layout: default
+      category: "Live Streaming API"
+
+# GitHub repository
+github_repo: https://github.com/Its-donkey/yougopher
