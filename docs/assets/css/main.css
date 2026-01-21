@@ -211,30 +211,6 @@ a:hover {
   position: relative;
 }
 
-.sidebar-section .expandable-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.sidebar-section .expand-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  font-size: 14px;
-  font-weight: bold;
-  color: var(--color-text-muted);
-  transition: transform 0.2s;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.sidebar-section .expandable.expanded .expand-arrow {
-  transform: rotate(90deg);
-}
-
 .sidebar-section .sub-nav {
   display: none;
   margin-left: var(--spacing-md);

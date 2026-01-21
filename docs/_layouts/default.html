@@ -221,19 +221,6 @@
       });
     });
 
-    // Add expand arrows
-    document.querySelectorAll('.expandable-toggle').forEach(toggle => {
-      const arrow = document.createElement('span');
-      arrow.className = 'expand-arrow';
-      arrow.innerHTML = '›';
-      arrow.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.closest('.expandable').classList.toggle('expanded');
-      });
-      toggle.insertBefore(arrow, toggle.firstChild);
-    });
-
     // Keyboard shortcut: Press '/' to focus search
     document.addEventListener('keydown', function(e) {
       if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
