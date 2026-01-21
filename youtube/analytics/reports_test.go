@@ -201,22 +201,22 @@ func TestClient_Query_ValidationErrors(t *testing.T) {
 		{
 			name:   "missing IDs",
 			params: &QueryParams{StartDate: "2025-01-01", EndDate: "2025-01-31", Metrics: "views"},
-			errMsg: "IDs parameter is required",
+			errMsg: "ids parameter is required",
 		},
 		{
 			name:   "missing StartDate",
 			params: &QueryParams{IDs: "channel==MINE", EndDate: "2025-01-31", Metrics: "views"},
-			errMsg: "StartDate parameter is required",
+			errMsg: "startDate parameter is required",
 		},
 		{
 			name:   "missing EndDate",
 			params: &QueryParams{IDs: "channel==MINE", StartDate: "2025-01-01", Metrics: "views"},
-			errMsg: "EndDate parameter is required",
+			errMsg: "endDate parameter is required",
 		},
 		{
 			name:   "missing Metrics",
 			params: &QueryParams{IDs: "channel==MINE", StartDate: "2025-01-01", EndDate: "2025-01-31"},
-			errMsg: "Metrics parameter is required",
+			errMsg: "metrics parameter is required",
 		},
 	}
 
