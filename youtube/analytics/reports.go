@@ -315,16 +315,16 @@ func (c *Client) Query(ctx context.Context, params *QueryParams) (*Report, error
 		return nil, fmt.Errorf("query params cannot be nil")
 	}
 	if params.IDs == "" {
-		return nil, fmt.Errorf("IDs parameter is required")
+		return nil, fmt.Errorf("ids parameter is required")
 	}
 	if params.StartDate == "" {
-		return nil, fmt.Errorf("StartDate parameter is required")
+		return nil, fmt.Errorf("startDate parameter is required")
 	}
 	if params.EndDate == "" {
-		return nil, fmt.Errorf("EndDate parameter is required")
+		return nil, fmt.Errorf("endDate parameter is required")
 	}
 	if params.Metrics == "" {
-		return nil, fmt.Errorf("Metrics parameter is required")
+		return nil, fmt.Errorf("metrics parameter is required")
 	}
 
 	// Build query parameters
