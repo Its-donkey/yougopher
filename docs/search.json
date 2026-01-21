@@ -1,0 +1,15 @@
+---
+layout: null
+---
+[
+  {% for page in site.pages %}
+    {% if page.title and page.url != "/search.json" and page.url != "/assets/css/main.css" %}
+    {
+      "title": {{ page.title | jsonify }},
+      "description": {{ page.description | default: "" | jsonify }},
+      "url": {{ page.url | relative_url | jsonify }},
+      "content": {{ page.content | strip_html | strip_newlines | truncate: 5000 | jsonify }}
+    }{% unless forloop.last %},{% endunless %}
+    {% endif %}
+  {% endfor %}
+]
