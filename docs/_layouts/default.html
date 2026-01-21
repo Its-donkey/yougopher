@@ -76,12 +76,58 @@
           <ul>
             <li><a href="{{ '/streaming' | relative_url }}">Overview</a></li>
             <li><a href="{{ '/live-streaming/' | relative_url }}">API Reference</a></li>
-            <li><a href="{{ '/live-streaming/LiveBroadcasts/' | relative_url }}">LiveBroadcasts</a></li>
-            <li><a href="{{ '/live-streaming/LiveStreams/' | relative_url }}">LiveStreams</a></li>
-            <li><a href="{{ '/live-streaming/LiveChatMessages/' | relative_url }}">LiveChatMessages</a></li>
-            <li><a href="{{ '/live-streaming/LiveChatBans/' | relative_url }}">LiveChatBans</a></li>
-            <li><a href="{{ '/live-streaming/LiveChatModerators/' | relative_url }}">LiveChatModerators</a></li>
-            <li><a href="{{ '/live-streaming/SuperChatEvents/' | relative_url }}">SuperChatEvents</a></li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/LiveBroadcasts/' | relative_url }}" class="expandable-toggle">LiveBroadcasts</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/list' | relative_url }}">list</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/insert' | relative_url }}">insert</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/update' | relative_url }}">update</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/delete' | relative_url }}">delete</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/bind' | relative_url }}">bind</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/transition' | relative_url }}">transition</a></li>
+                <li><a href="{{ '/live-streaming/LiveBroadcasts/cuepoint' | relative_url }}">cuepoint</a></li>
+              </ul>
+            </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/LiveStreams/' | relative_url }}" class="expandable-toggle">LiveStreams</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/LiveStreams/list' | relative_url }}">list</a></li>
+                <li><a href="{{ '/live-streaming/LiveStreams/insert' | relative_url }}">insert</a></li>
+                <li><a href="{{ '/live-streaming/LiveStreams/update' | relative_url }}">update</a></li>
+                <li><a href="{{ '/live-streaming/LiveStreams/delete' | relative_url }}">delete</a></li>
+              </ul>
+            </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/LiveChatMessages/' | relative_url }}" class="expandable-toggle">LiveChatMessages</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/LiveChatMessages/list' | relative_url }}">list</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatMessages/insert' | relative_url }}">insert</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatMessages/delete' | relative_url }}">delete</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatMessages/transition' | relative_url }}">transition</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatMessages/stream-list' | relative_url }}">stream-list</a></li>
+              </ul>
+            </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/LiveChatBans/' | relative_url }}" class="expandable-toggle">LiveChatBans</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/LiveChatBans/insert' | relative_url }}">insert</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatBans/delete' | relative_url }}">delete</a></li>
+              </ul>
+            </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/LiveChatModerators/' | relative_url }}" class="expandable-toggle">LiveChatModerators</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/LiveChatModerators/list' | relative_url }}">list</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatModerators/insert' | relative_url }}">insert</a></li>
+                <li><a href="{{ '/live-streaming/LiveChatModerators/delete' | relative_url }}">delete</a></li>
+              </ul>
+            </li>
+            <li class="expandable">
+              <a href="{{ '/live-streaming/SuperChatEvents/' | relative_url }}" class="expandable-toggle">SuperChatEvents</a>
+              <ul class="sub-nav">
+                <li><a href="{{ '/live-streaming/SuperChatEvents/list' | relative_url }}">list</a></li>
+              </ul>
+            </li>
           </ul>
         </div>
 
@@ -146,12 +192,46 @@
       this.classList.toggle('active');
     });
 
-    // Active link highlighting
+    // Active link highlighting and expandable navigation
     const currentPath = window.location.pathname;
     document.querySelectorAll('.sidebar a').forEach(link => {
-      if (link.getAttribute('href') === currentPath) {
+      const href = link.getAttribute('href');
+      if (href === currentPath || currentPath.startsWith(href.replace(/\/$/, '') + '/')) {
         link.classList.add('active');
+        // Auto-expand parent if this is a sub-nav item
+        const parentExpandable = link.closest('.expandable');
+        if (parentExpandable) {
+          parentExpandable.classList.add('expanded');
+        }
       }
+    });
+
+    // Toggle expandable items on click
+    document.querySelectorAll('.expandable-toggle').forEach(toggle => {
+      toggle.addEventListener('click', function(e) {
+        const parent = this.closest('.expandable');
+        // If clicking the toggle arrow area or already on this page, toggle expansion
+        if (parent.classList.contains('expanded') && this.classList.contains('active')) {
+          e.preventDefault();
+          parent.classList.remove('expanded');
+        } else if (!this.classList.contains('active')) {
+          // Navigate but also expand
+          parent.classList.add('expanded');
+        }
+      });
+    });
+
+    // Add expand arrows
+    document.querySelectorAll('.expandable-toggle').forEach(toggle => {
+      const arrow = document.createElement('span');
+      arrow.className = 'expand-arrow';
+      arrow.innerHTML = '›';
+      arrow.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closest('.expandable').classList.toggle('expanded');
+      });
+      toggle.insertBefore(arrow, toggle.firstChild);
     });
 
     // Keyboard shortcut: Press '/' to focus search

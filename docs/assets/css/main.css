@@ -206,6 +206,66 @@ a:hover {
   color: #fff;
 }
 
+/* Expandable Navigation */
+.sidebar-section li.expandable {
+  position: relative;
+}
+
+.sidebar-section .expandable-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.sidebar-section .expand-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--color-text-muted);
+  transition: transform 0.2s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-section .expandable.expanded .expand-arrow {
+  transform: rotate(90deg);
+}
+
+.sidebar-section .sub-nav {
+  display: none;
+  margin-left: var(--spacing-md);
+  margin-top: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+  border-left: 1px solid var(--color-border);
+}
+
+.sidebar-section .expandable.expanded .sub-nav {
+  display: block;
+}
+
+.sidebar-section .sub-nav li {
+  margin-bottom: 0;
+}
+
+.sidebar-section .sub-nav a {
+  font-size: 0.85rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--color-text-muted);
+}
+
+.sidebar-section .sub-nav a:hover {
+  color: var(--color-text);
+}
+
+.sidebar-section .sub-nav a.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;
