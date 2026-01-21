@@ -172,6 +172,21 @@ func TestChatEndedError_Error(t *testing.T) {
 	}
 }
 
+func TestNotFoundError_Error(t *testing.T) {
+	err := &NotFoundError{ResourceType: "video", ResourceID: "vid123"}
+	got := err.Error()
+
+	if !contains(got, "not found") {
+		t.Errorf("NotFoundError.Error() should contain 'not found', got %q", got)
+	}
+	if !contains(got, "video") {
+		t.Errorf("NotFoundError.Error() should contain resource type, got %q", got)
+	}
+	if !contains(got, "vid123") {
+		t.Errorf("NotFoundError.Error() should contain resource ID, got %q", got)
+	}
+}
+
 func TestBackoffConfig_Delay(t *testing.T) {
 	// Use fixed random for deterministic tests
 	backoff := &BackoffConfig{
@@ -271,4 +286,76 @@ func containsAt(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestInvalidTransitionError(t *testing.T) {
+	err := &InvalidTransitionError{
+		BroadcastID:    "broadcast123",
+		CurrentState:   "created",
+		RequestedState: "live",
+	}
+
+	msg := err.Error()
+	if !contains(msg, "broadcast123") {
+		t.Errorf("error message should contain broadcast ID")
+	}
+	if !contains(msg, "created") {
+		t.Errorf("error message should contain current state")
+	}
+	if !contains(msg, "live") {
+		t.Errorf("error message should contain requested state")
+	}
+	if !contains(msg, "invalid transition") {
+		t.Errorf("error message should contain 'invalid transition'")
+	}
+}
+
+func TestStreamNotHealthyError(t *testing.T) {
+	t.Run("with issues", func(t *testing.T) {
+		err := &StreamNotHealthyError{
+			StreamID: "stream123",
+			Status:   "bad",
+			Issues:   []string{"no video", "no audio"},
+		}
+
+		msg := err.Error()
+		if !contains(msg, "stream123") {
+			t.Errorf("error message should contain stream ID")
+		}
+		if !contains(msg, "bad") {
+			t.Errorf("error message should contain status")
+		}
+		if !contains(msg, "no video") {
+			t.Errorf("error message should contain issues")
+		}
+	})
+
+	t.Run("without issues", func(t *testing.T) {
+		err := &StreamNotHealthyError{
+			StreamID: "stream123",
+			Status:   "bad",
+		}
+
+		msg := err.Error()
+		if !contains(msg, "stream123") {
+			t.Errorf("error message should contain stream ID")
+		}
+		if !contains(msg, "bad") {
+			t.Errorf("error message should contain status")
+		}
+	})
+}
+
+func TestStreamNotBoundError(t *testing.T) {
+	err := &StreamNotBoundError{
+		BroadcastID: "broadcast123",
+	}
+
+	msg := err.Error()
+	if !contains(msg, "broadcast123") {
+		t.Errorf("error message should contain broadcast ID")
+	}
+	if !contains(msg, "no bound stream") {
+		t.Errorf("error message should contain 'no bound stream'")
+	}
 }

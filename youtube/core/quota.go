@@ -9,13 +9,17 @@ import (
 // See: https://developers.google.com/youtube/v3/determine_quota_cost
 var QuotaCosts = map[string]int{
 	// Live Chat
-	"liveChatMessages.list":     5,
-	"liveChatMessages.insert":   50,
-	"liveChatMessages.delete":   50,
-	"liveChatBans.insert":       50,
-	"liveChatBans.delete":       50,
-	"liveChatModerators.insert": 50,
-	"liveChatModerators.delete": 50,
+	"liveChatMessages.list":       5,
+	"liveChatMessages.streamList": 5, // SSE streaming connection
+	"liveChatMessages.insert":     50,
+	"liveChatMessages.delete":     50,
+	"liveChatMessages.transition": 50,
+	"liveChatBans.insert":         50,
+	"liveChatBans.delete":         50,
+	"liveChatModerators.list":     50,
+	"liveChatModerators.insert":   50,
+	"liveChatModerators.delete":   50,
+	"superChatEvents.list":        5,
 
 	// Data API - Read
 	"videos.list":        1,
@@ -46,14 +50,17 @@ var QuotaCosts = map[string]int{
 	"subscriptions.delete": 50,
 
 	// Live Streaming
-	"liveBroadcasts.list":   1,
-	"liveBroadcasts.insert": 50,
-	"liveBroadcasts.update": 50,
-	"liveBroadcasts.delete": 50,
-	"liveStreams.list":      1,
-	"liveStreams.insert":    50,
-	"liveStreams.update":    50,
-	"liveStreams.delete":    50,
+	"liveBroadcasts.list":       1,
+	"liveBroadcasts.insert":     50,
+	"liveBroadcasts.update":     50,
+	"liveBroadcasts.delete":     50,
+	"liveBroadcasts.bind":       50,
+	"liveBroadcasts.transition": 50,
+	"liveBroadcasts.cuepoint":   50,
+	"liveStreams.list":          1,
+	"liveStreams.insert":        50,
+	"liveStreams.update":        50,
+	"liveStreams.delete":        50,
 }
 
 // DefaultDailyQuota is the default daily quota for YouTube Data API projects.
