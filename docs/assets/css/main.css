@@ -368,6 +368,7 @@ blockquote {
   background: var(--color-footer);
   color: rgba(255,255,255,0.9);
   padding: var(--spacing-2xl) var(--spacing-lg);
+  margin-right: var(--sidebar-width);
 }
 
 .footer-container {
@@ -408,13 +409,19 @@ blockquote {
 }
 
 .footer-bottom {
-  max-width: 1200px;
-  margin: var(--spacing-xl) auto 0;
-  padding-top: var(--spacing-lg);
+  position: relative;
+  z-index: 1001;
+  width: 100%;
+  padding: var(--spacing-lg);
+  background: var(--color-footer);
   border-top: 1px solid rgba(255,255,255,0.1);
   text-align: center;
   font-size: 0.875rem;
   color: rgba(255,255,255,0.6);
+}
+
+.footer-bottom p {
+  margin: 0;
 }
 
 .footer-disclaimer {
@@ -432,6 +439,10 @@ blockquote {
   .main-content {
     margin-right: 0;
     max-width: 100%;
+  }
+
+  .footer {
+    margin-right: 0;
   }
 }
 
