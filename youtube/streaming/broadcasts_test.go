@@ -1059,6 +1059,68 @@ func TestLiveBroadcast_NewMethods(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("TotalChatCount", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			broadcast *LiveBroadcast
+			want      uint64
+		}{
+			{"nil statistics", &LiveBroadcast{}, 0},
+			{"zero count", &LiveBroadcast{Statistics: &BroadcastStatistics{}}, 0},
+			{"has count", &LiveBroadcast{Statistics: &BroadcastStatistics{TotalChatCount: 12345}}, 12345},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := tt.broadcast.TotalChatCount(); got != tt.want {
+					t.Errorf("TotalChatCount() = %d, want %d", got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("HasCuepointSchedule", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			broadcast *LiveBroadcast
+			want      bool
+		}{
+			{"nil monetizationDetails", &LiveBroadcast{}, false},
+			{"nil cuepointSchedule", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{}}, false},
+			{"disabled", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{CuepointSchedule: &CuepointSchedule{Enabled: false}}}, false},
+			{"enabled", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{CuepointSchedule: &CuepointSchedule{Enabled: true}}}, true},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := tt.broadcast.HasCuepointSchedule(); got != tt.want {
+					t.Errorf("HasCuepointSchedule() = %v, want %v", got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("CuepointRepeatInterval", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			broadcast *LiveBroadcast
+			want      int
+		}{
+			{"nil monetizationDetails", &LiveBroadcast{}, 0},
+			{"nil cuepointSchedule", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{}}, 0},
+			{"zero interval", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{CuepointSchedule: &CuepointSchedule{}}}, 0},
+			{"has interval", &LiveBroadcast{MonetizationDetails: &BroadcastMonetizationDetails{CuepointSchedule: &CuepointSchedule{RepeatIntervalSecs: 300}}}, 300},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := tt.broadcast.CuepointRepeatInterval(); got != tt.want {
+					t.Errorf("CuepointRepeatInterval() = %d, want %d", got, tt.want)
+				}
+			})
+		}
+	})
 }
 
 func TestTransitionConstants(t *testing.T) {

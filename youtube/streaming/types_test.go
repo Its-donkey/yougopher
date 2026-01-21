@@ -104,11 +104,12 @@ func TestLiveChatMessage_TypeCheckers(t *testing.T) {
 		isMembership       bool
 		isMemberMilestone  bool
 		isGiftMembership   bool
+		isPoll             bool
 	}{
 		{
-			name:       "text message",
-			msgType:    MessageTypeText,
-			isText:     true,
+			name:    "text message",
+			msgType: MessageTypeText,
+			isText:  true,
 		},
 		{
 			name:        "super chat",
@@ -135,6 +136,11 @@ func TestLiveChatMessage_TypeCheckers(t *testing.T) {
 			msgType:          MessageTypeMembershipGifting,
 			isGiftMembership: true,
 		},
+		{
+			name:    "poll event",
+			msgType: MessageTypePoll,
+			isPoll:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -158,6 +164,9 @@ func TestLiveChatMessage_TypeCheckers(t *testing.T) {
 			}
 			if got := msg.IsGiftMembership(); got != tt.isGiftMembership {
 				t.Errorf("IsGiftMembership() = %v, want %v", got, tt.isGiftMembership)
+			}
+			if got := msg.IsPoll(); got != tt.isPoll {
+				t.Errorf("IsPoll() = %v, want %v", got, tt.isPoll)
 			}
 		})
 	}
@@ -752,5 +761,214 @@ func TestLiveChatMessage_Clone_EmptyPollChoices(t *testing.T) {
 	clone := original.Clone()
 	if clone.Snippet.PollDetails.Choices != nil {
 		t.Errorf("Choices = %v, want nil", clone.Snippet.PollDetails.Choices)
+	}
+}
+
+func TestLiveChatMessage_IsPoll(t *testing.T) {
+	tests := []struct {
+		name    string
+		msgType string
+		want    bool
+	}{
+		{"poll event", MessageTypePoll, true},
+		{"text message", MessageTypeText, false},
+		{"super chat", MessageTypeSuperChat, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &LiveChatMessage{Snippet: &MessageSnippet{Type: tt.msgType}}
+			if got := msg.IsPoll(); got != tt.want {
+				t.Errorf("IsPoll() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_HasActivePoll(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     *LiveChatMessage
+		want    bool
+	}{
+		{
+			name: "nil snippet",
+			msg:  &LiveChatMessage{},
+			want: false,
+		},
+		{
+			name: "no active poll",
+			msg:  &LiveChatMessage{Snippet: &MessageSnippet{}},
+			want: false,
+		},
+		{
+			name: "has active poll",
+			msg: &LiveChatMessage{
+				Snippet: &MessageSnippet{
+					ActivePollItem: &LiveChatMessage{
+						ID: "poll123",
+						Snippet: &MessageSnippet{
+							Type: MessageTypePoll,
+							PollDetails: &PollDetails{
+								Question: "Test poll?",
+								Status:   PollStatusOpen,
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.msg.HasActivePoll(); got != tt.want {
+				t.Errorf("HasActivePoll() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLiveChatMessage_ActivePoll(t *testing.T) {
+	t.Run("nil snippet", func(t *testing.T) {
+		msg := &LiveChatMessage{}
+		if got := msg.ActivePoll(); got != nil {
+			t.Errorf("ActivePoll() = %v, want nil", got)
+		}
+	})
+
+	t.Run("no active poll", func(t *testing.T) {
+		msg := &LiveChatMessage{Snippet: &MessageSnippet{}}
+		if got := msg.ActivePoll(); got != nil {
+			t.Errorf("ActivePoll() = %v, want nil", got)
+		}
+	})
+
+	t.Run("has active poll", func(t *testing.T) {
+		activePoll := &LiveChatMessage{
+			ID: "poll123",
+			Snippet: &MessageSnippet{
+				Type: MessageTypePoll,
+				PollDetails: &PollDetails{
+					Question: "Favorite color?",
+					Status:   PollStatusOpen,
+				},
+			},
+		}
+		msg := &LiveChatMessage{
+			Snippet: &MessageSnippet{
+				ActivePollItem: activePoll,
+			},
+		}
+
+		got := msg.ActivePoll()
+		if got != activePoll {
+			t.Errorf("ActivePoll() = %v, want %v", got, activePoll)
+		}
+		if got.ID != "poll123" {
+			t.Errorf("ActivePoll().ID = %q, want 'poll123'", got.ID)
+		}
+		if got.Snippet.PollDetails.Question != "Favorite color?" {
+			t.Errorf("ActivePoll().Snippet.PollDetails.Question = %q, want 'Favorite color?'",
+				got.Snippet.PollDetails.Question)
+		}
+	})
+}
+
+func TestLiveChatMessage_Clone_ActivePollItem(t *testing.T) {
+	original := &LiveChatMessage{
+		ID: "msg123",
+		Snippet: &MessageSnippet{
+			Type: MessageTypeText,
+			ActivePollItem: &LiveChatMessage{
+				ID: "poll123",
+				Snippet: &MessageSnippet{
+					Type: MessageTypePoll,
+					PollDetails: &PollDetails{
+						Question: "Favorite color?",
+						Status:   PollStatusOpen,
+						Choices: []PollChoice{
+							{ChoiceID: "a", Text: "Red"},
+							{ChoiceID: "b", Text: "Blue"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clone := original.Clone()
+	if clone == original {
+		t.Error("Clone() returned same pointer")
+	}
+	if clone.Snippet.ActivePollItem == original.Snippet.ActivePollItem {
+		t.Error("Clone() did not deep copy ActivePollItem")
+	}
+	if clone.Snippet.ActivePollItem.ID != "poll123" {
+		t.Errorf("ActivePollItem.ID = %q, want 'poll123'", clone.Snippet.ActivePollItem.ID)
+	}
+	if clone.Snippet.ActivePollItem.Snippet.PollDetails.Question != "Favorite color?" {
+		t.Errorf("ActivePollItem.Snippet.PollDetails.Question = %q, want 'Favorite color?'",
+			clone.Snippet.ActivePollItem.Snippet.PollDetails.Question)
+	}
+
+	// Modify clone and verify original unchanged
+	clone.Snippet.ActivePollItem.ID = "modified"
+	if original.Snippet.ActivePollItem.ID == "modified" {
+		t.Error("Clone() did not create deep copy of ActivePollItem")
+	}
+}
+
+func TestActivePollItem_JSON(t *testing.T) {
+	jsonData := `{
+		"id": "msg123",
+		"snippet": {
+			"type": "textMessageEvent",
+			"activePollItem": {
+				"id": "poll123",
+				"snippet": {
+					"type": "pollEvent",
+					"pollDetails": {
+						"pollId": "poll-001",
+						"question": "What's your favorite color?",
+						"status": "open",
+						"choices": [
+							{"choiceId": "a", "text": "Red"},
+							{"choiceId": "b", "text": "Blue"},
+							{"choiceId": "c", "text": "Green"}
+						]
+					}
+				}
+			}
+		}
+	}`
+
+	var msg LiveChatMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	if err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	if !msg.HasActivePoll() {
+		t.Fatal("HasActivePoll() = false, want true")
+	}
+
+	poll := msg.ActivePoll()
+	if poll == nil {
+		t.Fatal("ActivePoll() returned nil")
+	}
+	if poll.ID != "poll123" {
+		t.Errorf("ActivePoll().ID = %q, want 'poll123'", poll.ID)
+	}
+	if poll.Snippet.Type != MessageTypePoll {
+		t.Errorf("ActivePoll().Snippet.Type = %q, want %q", poll.Snippet.Type, MessageTypePoll)
+	}
+	if poll.Snippet.PollDetails.Question != "What's your favorite color?" {
+		t.Errorf("PollDetails.Question = %q, want 'What's your favorite color?'",
+			poll.Snippet.PollDetails.Question)
+	}
+	if len(poll.Snippet.PollDetails.Choices) != 3 {
+		t.Errorf("len(Choices) = %d, want 3", len(poll.Snippet.PollDetails.Choices))
 	}
 }
