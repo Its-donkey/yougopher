@@ -77,7 +77,7 @@ for _, stream := range resp.Items {
 ```go
 stream, _ := streaming.GetStream(ctx, client, streamID, "cdn")
 
-fmt.Println("=== OBS Configuration ===")
+fmt.Println("=== Configuration for streaming software ===")
 fmt.Printf("Server: %s\n", stream.RTMPSUrl())  // Use RTMPS for security
 fmt.Printf("Stream Key: %s\n", stream.StreamKey())
 ```

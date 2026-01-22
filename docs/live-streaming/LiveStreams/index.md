@@ -37,7 +37,7 @@ type LiveStream struct {
 stream.IsActive()               // Receiving video data
 stream.IsReady()                // Ready to go live
 stream.IsHealthy()              // Health is good or ok
-stream.StreamKey()              // Stream key for OBS
+stream.StreamKey()              // Stream key for streaming software
 stream.RTMPUrl()                // Primary RTMP URL
 stream.RTMPSUrl()               // Secure RTMPS URL
 stream.HasConfigurationIssues() // Configuration problems exist
@@ -82,7 +82,7 @@ stream, err := streaming.InsertStream(ctx, client, &streaming.LiveStream{
     },
 }, "snippet", "cdn", "status")
 
-// Get OBS configuration
+// Get configuration details for streaming software
 fmt.Printf("Server: %s\n", stream.RTMPSUrl())
 fmt.Printf("Stream Key: %s\n", stream.StreamKey())
 

@@ -176,11 +176,11 @@
 //		Resolution:    "1080p",
 //	})
 //
-//	// Configure OBS with stream key
+//	// Configure streaming software with stream key
 //	fmt.Printf("RTMP URL: %s\n", result.Stream.RTMPUrl())
 //	fmt.Printf("Stream Key: %s\n", result.Stream.StreamKey())
 //
-//	// Start streaming in OBS, then go through states
+//	// Start streaming in streaming software, then go through states
 //	controller.StartTesting(ctx, result.Broadcast.ID)
 //	controller.GoLive(ctx, result.Broadcast.ID)
 //	controller.EndBroadcast(ctx, result.Broadcast.ID)

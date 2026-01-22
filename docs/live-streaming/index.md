@@ -13,7 +13,7 @@ YouTube Live Streaming API endpoints available through Yougopher.
 | Resource | Methods | Description |
 |----------|---------|-------------|
 | [LiveBroadcasts](LiveBroadcasts/) | list, insert, update, delete, bind, transition, cuepoint | Broadcast events that appear on your channel. Bind to streams, transition through states (testing → live → complete), insert ad breaks. |
-| [LiveStreams](LiveStreams/) | list, insert, update, delete | Video streams containing RTMP/RTMPS ingestion URLs and stream keys for OBS or other encoders. |
+| [LiveStreams](LiveStreams/) | list, insert, update, delete | Video streams containing RTMP/RTMPS ingestion URLs and stream keys for streaming software. |
 | [LiveChatMessages](LiveChatMessages/) | list, insert, delete | Chat messages including text, Super Chats, Super Stickers, memberships, and polls. |
 | [LiveChatBans](LiveChatBans/) | insert, delete | Temporary timeouts or permanent bans for chat users. |
 | [LiveChatModerators](LiveChatModerators/) | list, insert, delete | Grant and revoke moderator privileges for chat users. |

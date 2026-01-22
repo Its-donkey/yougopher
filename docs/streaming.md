@@ -731,7 +731,7 @@ stream, err := streaming.GetStream(ctx, client, streamID, "snippet", "cdn", "sta
 
 ### GetStreamKey
 
-Get the stream key for OBS/streaming software.
+Get the stream key for streaming software.
 
 ```go
 stream, err := streaming.GetStream(ctx, client, streamID, "cdn")
@@ -817,7 +817,7 @@ result, err := controller.CreateBroadcastWithStream(ctx, &streaming.CreateBroadc
     LatencyPreference:  "low",
 })
 
-// Get stream key for OBS
+// Get stream key for streaming software
 fmt.Printf("RTMP URL: %s\n", result.Stream.RTMPUrl())
 fmt.Printf("Stream Key: %s\n", result.Stream.StreamKey())
 ```
@@ -831,11 +831,11 @@ result, err := controller.CreateBroadcastWithStream(ctx, &streaming.CreateBroadc
     PrivacyStatus: "unlisted",
 })
 
-// 2. Configure OBS/encoder with stream key
+// 2. Configure streaming software with stream key
 fmt.Printf("RTMP URL: %s\n", result.Stream.RTMPUrl())
 fmt.Printf("Stream Key: %s\n", result.Stream.StreamKey())
 
-// 3. Start streaming in OBS, then start testing
+// 3. Start streaming in streaming software, then start testing
 broadcast, err := controller.StartTesting(ctx, result.Broadcast.ID)
 
 // 4. Verify everything looks good, then go live

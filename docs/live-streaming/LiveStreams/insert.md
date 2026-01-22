@@ -75,14 +75,14 @@ fmt.Printf("RTMPS URL: %s\n", created.RTMPSUrl())
 | `60fps` | 60 frames per second |
 | `variable` | Auto-detect |
 
-## OBS Configuration
+## Configuration details for streaming software
 
-After creating a stream, configure OBS:
+After creating a stream, configure streaming software:
 
 ```go
 stream, _ := streaming.InsertStream(ctx, client, stream, "cdn")
 
-fmt.Println("=== OBS Configuration ===")
+fmt.Println("=== Configuration for streaming software ===")
 fmt.Printf("Server: %s\n", stream.RTMPSUrl()) // Use RTMPS for security
 fmt.Printf("Stream Key: %s\n", stream.StreamKey())
 ```

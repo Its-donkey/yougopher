@@ -73,7 +73,7 @@ type StreamCDN struct {
 
 // IngestionInfo contains the stream key and ingest URLs.
 type IngestionInfo struct {
-	// StreamName is the stream key (used in OBS/streaming software).
+	// StreamName is the stream key used in streaming software).
 	StreamName string `json:"streamName,omitempty"`
 
 	// IngestionAddress is the primary RTMP ingest URL.
@@ -390,7 +390,7 @@ func (s *LiveStream) IsHealthy() bool {
 	return status == StreamHealthGood || status == StreamHealthOK
 }
 
-// StreamKey returns the stream key for OBS/streaming software.
+// StreamKey returns the stream key for streaming software.
 // Returns empty string if not available.
 func (s *LiveStream) StreamKey() string {
 	if s.CDN == nil || s.CDN.IngestionInfo == nil {
