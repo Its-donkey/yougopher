@@ -517,7 +517,7 @@ blockquote {
   box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
 }
 
-.navbar-search-mobile {
+.navbar-links .navbar-search-mobile {
   display: none;
 }
 
@@ -602,13 +602,13 @@ blockquote {
 }
 
 @media (max-width: 768px) {
-  .navbar-search-mobile {
+  .navbar-links .navbar-search-mobile {
     display: block;
     padding: var(--spacing-md);
     border-bottom: 1px solid rgba(255,255,255,0.1);
   }
 
-  .navbar-search-mobile .sidebar-search-input {
+  .navbar-links .navbar-search-mobile .sidebar-search-input {
     width: 100%;
   }
 }
