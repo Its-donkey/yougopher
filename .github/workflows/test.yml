@@ -112,12 +112,24 @@ jobs:
               results: (.[0].results + .[1].results)
             }' mutation-report.json mutation-report-new.json > mutation-report-merged.json
             mv mutation-report-merged.json mutation-report.json
-          else
+          elif [[ -f mutation-report-new.json ]]; then
             # No existing report, use new one
             mv mutation-report-new.json mutation-report.json
+          elif [[ -f mutation-report.json ]]; then
+            # No new report (no Go changes), keep existing
+            echo "No Go files changed - keeping existing report"
+          else
+            # No reports at all
+            echo "No mutation report to process"
           fi
       - name: Generate summary
         run: |
+          if [[ ! -f mutation-report.json ]]; then
+            echo "## Mutation Testing" >> $GITHUB_STEP_SUMMARY
+            echo "No Go files changed - mutation testing skipped" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
           SCORE=$(jq '.summary.MutationScore' mutation-report.json)
           KILLED=$(jq '.summary.Killed' mutation-report.json)
           SURVIVED=$(jq '.summary.Survived' mutation-report.json)
@@ -132,12 +144,15 @@ jobs:
           echo "| Survived | $SURVIVED |" >> $GITHUB_STEP_SUMMARY
           echo "| Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
       - name: Upload mutation report
+        if: ${{ hashFiles('mutation-report.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report
           path: mutation-report.json
           overwrite: true
       - name: Commit mutation report
+        # Only commit on PRs - protected branches block direct pushes
+        if: github.event_name == 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -146,9 +161,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: update mutation testing report"
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              git push origin HEAD:${{ github.head_ref }}
-            else
-              git push
-            fi
+            git push origin HEAD:${{ github.head_ref }}
           fi
