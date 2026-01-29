@@ -3,9 +3,12 @@ package streaming
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Its-donkey/yougopher/youtube/core"
 )
@@ -1295,5 +1298,970 @@ func TestCuepointConstants(t *testing.T) {
 	}
 	if CuepointInsertImmediate != -1 {
 		t.Errorf("CuepointInsertImmediate = %d, want -1", CuepointInsertImmediate)
+	}
+}
+
+// =============================================================================
+// Error Type Verification Tests (errors.As)
+// =============================================================================
+
+func TestGetBroadcast_ErrorAs_NotFoundError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return empty items to trigger NotFoundError
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(LiveBroadcastListResponse{
+			Items: []*LiveBroadcast{},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	_, err := GetBroadcast(context.Background(), client, "nonexistent123")
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Verify using errors.As
+	var notFoundErr *core.NotFoundError
+	if !errors.As(err, &notFoundErr) {
+		t.Errorf("errors.As(err, *NotFoundError) = false, want true; err = %v (%T)", err, err)
+	}
+
+	// Verify error fields
+	if notFoundErr != nil {
+		if notFoundErr.ResourceType != "broadcast" {
+			t.Errorf("ResourceType = %q, want 'broadcast'", notFoundErr.ResourceType)
+		}
+		if notFoundErr.ResourceID != "nonexistent123" {
+			t.Errorf("ResourceID = %q, want 'nonexistent123'", notFoundErr.ResourceID)
+		}
+	}
+}
+
+func TestGetMyActiveBroadcast_ReturnsError_WhenNoBroadcast(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(LiveBroadcastListResponse{
+			Items: []*LiveBroadcast{},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	_, err := GetMyActiveBroadcast(context.Background(), client)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// GetMyActiveBroadcast returns a plain error (not NotFoundError) for no active broadcast
+	expectedMsg := "no active broadcast found"
+	if err.Error() != expectedMsg {
+		t.Errorf("error message = %q, want %q", err.Error(), expectedMsg)
+	}
+}
+
+// =============================================================================
+// Mock Call Count and Request Verification Tests
+// =============================================================================
+
+func TestInsertBroadcast_VerifyAPICall(t *testing.T) {
+	var (
+		callCount   int
+		lastMethod  string
+		lastPath    string
+		lastBody    map[string]any
+		lastHeaders http.Header
+		mu          sync.Mutex
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		callCount++
+		lastMethod = r.Method
+		lastPath = r.URL.Path
+		lastHeaders = r.Header.Clone()
+		_ = json.NewDecoder(r.Body).Decode(&lastBody)
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(LiveBroadcast{
+			ID:   "broadcast123",
+			Kind: "youtube#liveBroadcast",
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	scheduledStart := time.Now().Add(1 * time.Hour)
+	broadcast := &LiveBroadcast{
+		Snippet: &BroadcastSnippet{
+			Title:              "Test Stream",
+			ScheduledStartTime: &scheduledStart,
+		},
+		Status: &BroadcastStatus{
+			PrivacyStatus: "private",
+		},
+	}
+
+	_, err := InsertBroadcast(context.Background(), client, broadcast)
+	if err != nil {
+		t.Fatalf("InsertBroadcast() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Verify call count
+	if callCount != 1 {
+		t.Errorf("API called %d times, want 1", callCount)
+	}
+
+	// Verify method
+	if lastMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", lastMethod)
+	}
+
+	// Verify path
+	if lastPath != "/liveBroadcasts" {
+		t.Errorf("path = %s, want /liveBroadcasts", lastPath)
+	}
+
+	// Verify Content-Type header
+	if ct := lastHeaders.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %s, want application/json", ct)
+	}
+
+	// Verify request body
+	snippet, ok := lastBody["snippet"].(map[string]any)
+	if !ok {
+		t.Fatal("request body missing snippet")
+	}
+	if snippet["title"] != "Test Stream" {
+		t.Errorf("title = %v, want 'Test Stream'", snippet["title"])
+	}
+}
+
+func TestDeleteBroadcast_VerifyAPICall(t *testing.T) {
+	var (
+		callCount  int
+		lastMethod string
+		lastPath   string
+		lastQuery  string
+		mu         sync.Mutex
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		callCount++
+		lastMethod = r.Method
+		lastPath = r.URL.Path
+		lastQuery = r.URL.Query().Get("id")
+		mu.Unlock()
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	err := DeleteBroadcast(context.Background(), client, "broadcast123")
+	if err != nil {
+		t.Fatalf("DeleteBroadcast() error = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if callCount != 1 {
+		t.Errorf("API called %d times, want 1", callCount)
+	}
+
+	if lastMethod != http.MethodDelete {
+		t.Errorf("method = %s, want DELETE", lastMethod)
+	}
+
+	if lastPath != "/liveBroadcasts" {
+		t.Errorf("path = %s, want /liveBroadcasts", lastPath)
+	}
+
+	if lastQuery != "broadcast123" {
+		t.Errorf("id query param = %s, want broadcast123", lastQuery)
+	}
+}
+
+// =============================================================================
+// Integration Test: Complete Broadcast Workflow
+// =============================================================================
+
+func TestBroadcastWorkflow_CreateBindTransition(t *testing.T) {
+	// Track the workflow stages
+	var (
+		insertCalled     bool
+		bindCalled       bool
+		transitionCalled bool
+		deleteCalled     bool
+		mu               sync.Mutex
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/liveBroadcasts" && r.URL.Query().Get("streamId") == "":
+			// Insert broadcast
+			insertCalled = true
+			_ = json.NewEncoder(w).Encode(LiveBroadcast{
+				ID:   "broadcast123",
+				Kind: "youtube#liveBroadcast",
+				Status: &BroadcastStatus{
+					LifeCycleStatus: BroadcastStatusCreated,
+				},
+			})
+
+		case r.Method == http.MethodPost && r.URL.Path == "/liveBroadcasts/bind":
+			// Bind stream to broadcast
+			bindCalled = true
+			_ = json.NewEncoder(w).Encode(LiveBroadcast{
+				ID: "broadcast123",
+				ContentDetails: &BroadcastContentDetails{
+					BoundStreamID: r.URL.Query().Get("streamId"),
+				},
+			})
+
+		case r.Method == http.MethodPost && r.URL.Path == "/liveBroadcasts/transition":
+			transitionCalled = true
+			_ = json.NewEncoder(w).Encode(LiveBroadcast{
+				ID: "broadcast123",
+				Status: &BroadcastStatus{
+					LifeCycleStatus: r.URL.Query().Get("broadcastStatus"),
+				},
+			})
+
+		case r.Method == http.MethodDelete && r.URL.Path == "/liveBroadcasts":
+			deleteCalled = true
+			w.WriteHeader(http.StatusNoContent)
+
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	// Step 1: Create broadcast
+	scheduledTime := time.Now().Add(1 * time.Hour)
+	broadcast, err := InsertBroadcast(ctx, client, &LiveBroadcast{
+		Snippet: &BroadcastSnippet{
+			Title:              "Integration Test Stream",
+			ScheduledStartTime: &scheduledTime,
+		},
+		Status: &BroadcastStatus{
+			PrivacyStatus: "private",
+		},
+	})
+	if err != nil {
+		t.Fatalf("InsertBroadcast() error = %v", err)
+	}
+	if broadcast.ID != "broadcast123" {
+		t.Errorf("broadcast ID = %s, want broadcast123", broadcast.ID)
+	}
+
+	// Step 2: Bind stream to broadcast
+	bound, err := BindBroadcast(ctx, client, &BindBroadcastParams{
+		BroadcastID: "broadcast123",
+		StreamID:    "stream123",
+	})
+	if err != nil {
+		t.Fatalf("BindBroadcast() error = %v", err)
+	}
+	if bound.ContentDetails == nil || bound.ContentDetails.BoundStreamID != "stream123" {
+		t.Error("stream not bound correctly")
+	}
+
+	// Step 3: Transition to testing
+	testing, err := TransitionBroadcast(ctx, client, "broadcast123", TransitionTesting)
+	if err != nil {
+		t.Fatalf("TransitionBroadcast(testing) error = %v", err)
+	}
+	if testing.Status == nil || testing.Status.LifeCycleStatus != TransitionTesting {
+		t.Error("broadcast not transitioned to testing")
+	}
+
+	// Step 4: Delete broadcast (cleanup)
+	err = DeleteBroadcast(ctx, client, "broadcast123")
+	if err != nil {
+		t.Fatalf("DeleteBroadcast() error = %v", err)
+	}
+
+	// Verify all stages were called
+	mu.Lock()
+	defer mu.Unlock()
+
+	if !insertCalled {
+		t.Error("insert was not called")
+	}
+	if !bindCalled {
+		t.Error("bind was not called")
+	}
+	if !transitionCalled {
+		t.Error("transition was not called")
+	}
+	if !deleteCalled {
+		t.Error("delete was not called")
+	}
+}
+
+// =============================================================================
+// Mutation Testing - Kill Surviving Mutants
+// =============================================================================
+
+// TestGetBroadcasts_DefaultParts verifies default parts are used when none provided.
+// Kills mutant: `parts = DefaultBroadcastParts` → removed
+func TestGetBroadcasts_DefaultParts(t *testing.T) {
+	var capturedParts string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedParts = r.URL.Query().Get("part")
+		resp := LiveBroadcastListResponse{Items: []*LiveBroadcast{{ID: "b1"}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	_, err := GetBroadcasts(context.Background(), client, &GetBroadcastsParams{
+		IDs:   []string{"b1"},
+		Parts: nil, // No parts - should use DefaultBroadcastParts
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// DefaultBroadcastParts is []string{"snippet", "status"}
+	expected := "snippet,status"
+	if capturedParts != expected {
+		t.Errorf("part = %q, want %q (default parts)", capturedParts, expected)
+	}
+}
+
+// TestGetBroadcast_DefaultParts verifies GetBroadcast uses default parts when none provided.
+// Kills mutant: `if len(parts) == 0` → `if len(parts) == -1` or `== 1`
+func TestGetBroadcast_DefaultParts(t *testing.T) {
+	var capturedParts string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedParts = r.URL.Query().Get("part")
+		resp := LiveBroadcastListResponse{Items: []*LiveBroadcast{{ID: "b1"}}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	// Call with no parts - should use defaults
+	_, err := GetBroadcast(context.Background(), client, "b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "snippet,status"
+	if capturedParts != expected {
+		t.Errorf("part = %q, want %q (default parts)", capturedParts, expected)
+	}
+}
+
+// TestInsertBroadcast_DefaultParts verifies InsertBroadcast uses default parts when none provided.
+// Kills mutant: `if len(parts) == 0` → `if len(parts) == 1`
+func TestInsertBroadcast_DefaultParts(t *testing.T) {
+	var capturedParts string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedParts = r.URL.Query().Get("part")
+		resp := LiveBroadcast{ID: "b1"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	scheduledTime := time.Now().Add(1 * time.Hour)
+	_, err := InsertBroadcast(context.Background(), client, &LiveBroadcast{
+		Snippet: &BroadcastSnippet{
+			Title:              "Test",
+			ScheduledStartTime: &scheduledTime,
+		},
+		Status: &BroadcastStatus{PrivacyStatus: "private"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "snippet,status"
+	if capturedParts != expected {
+		t.Errorf("part = %q, want %q (default parts)", capturedParts, expected)
+	}
+}
+
+// TestUpdateBroadcast_DefaultParts verifies UpdateBroadcast uses default parts when none provided.
+// Kills mutant: `if len(parts) == 0` → `if len(parts) == -1`
+func TestUpdateBroadcast_DefaultParts(t *testing.T) {
+	var capturedParts string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedParts = r.URL.Query().Get("part")
+		resp := LiveBroadcast{ID: "b1"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	_, err := UpdateBroadcast(context.Background(), client, &LiveBroadcast{
+		ID: "b1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "snippet,status"
+	if capturedParts != expected {
+		t.Errorf("part = %q, want %q (default parts)", capturedParts, expected)
+	}
+}
+
+// TestGetBroadcasts_MaxResultsBoundary tests MaxResults=1 boundary.
+// Kills mutant: `if params.MaxResults > 0` → `> 1`
+func TestGetBroadcasts_MaxResultsBoundary(t *testing.T) {
+	tests := []struct {
+		name        string
+		maxResults  int
+		shouldHave  bool
+		expectedVal string
+	}{
+		{"maxResults=0 not sent", 0, false, ""},
+		{"maxResults=1 sent", 1, true, "1"},
+		{"maxResults=5 sent", 5, true, "5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedMaxResults string
+			var hasMaxResults bool
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedMaxResults = r.URL.Query().Get("maxResults")
+				hasMaxResults = r.URL.Query().Has("maxResults")
+				resp := LiveBroadcastListResponse{Items: []*LiveBroadcast{{ID: "b1"}}}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			client := core.NewClient(core.WithBaseURL(server.URL))
+			_, err := GetBroadcasts(context.Background(), client, &GetBroadcastsParams{
+				IDs:        []string{"b1"},
+				MaxResults: tt.maxResults,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if hasMaxResults != tt.shouldHave {
+				t.Errorf("maxResults presence = %v, want %v", hasMaxResults, tt.shouldHave)
+			}
+			if tt.shouldHave && capturedMaxResults != tt.expectedVal {
+				t.Errorf("maxResults = %q, want %q", capturedMaxResults, tt.expectedVal)
+			}
+		})
+	}
+}
+
+// TestInsertCuepoint_DurationBoundary tests DurationSecs=1 boundary.
+// Kills mutant: `if params.DurationSecs > 0` → `> 1`
+func TestInsertCuepoint_DurationBoundary(t *testing.T) {
+	tests := []struct {
+		name             string
+		durationSecs     int
+		expectInBody     bool
+		expectedDuration int
+	}{
+		{"duration=0 default used", 0, false, 0},
+		{"duration=1 sent", 1, true, 1},
+		{"duration=60 sent", 60, true, 60},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody CuepointRequest
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+				resp := Cuepoint{ID: "cue1"}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			client := core.NewClient(core.WithBaseURL(server.URL))
+			_, err := InsertCuepoint(context.Background(), client, &InsertCuepointParams{
+				BroadcastID:  "b1",
+				DurationSecs: tt.durationSecs,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.expectInBody && capturedBody.DurationSecs != tt.expectedDuration {
+				t.Errorf("DurationSecs = %d, want %d", capturedBody.DurationSecs, tt.expectedDuration)
+			}
+		})
+	}
+}
+
+// TestInsertCuepoint_WalltimeBoundary tests WalltimeMs=1 boundary.
+// Kills mutant: `if params.WalltimeMs > 0` → `> 1`
+func TestInsertCuepoint_WalltimeBoundary(t *testing.T) {
+	tests := []struct {
+		name           string
+		walltimeMs     int64
+		expectInBody   bool
+		expectedWallMs int64
+	}{
+		{"walltimeMs=0 not sent", 0, false, 0},
+		{"walltimeMs=1 sent", 1, true, 1},
+		{"walltimeMs=1000 sent", 1000, true, 1000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody CuepointRequest
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+				resp := Cuepoint{ID: "cue1"}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			client := core.NewClient(core.WithBaseURL(server.URL))
+			_, err := InsertCuepoint(context.Background(), client, &InsertCuepointParams{
+				BroadcastID: "b1",
+				WalltimeMs:  tt.walltimeMs,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.expectInBody && capturedBody.WalltimeMs != tt.expectedWallMs {
+				t.Errorf("WalltimeMs = %d, want %d", capturedBody.WalltimeMs, tt.expectedWallMs)
+			}
+		})
+	}
+}
+
+// TestInsertCuepoint_InsertionOffsetBoundary tests InsertionOffsetTimeMs boundary.
+// Kills mutant: `if params.InsertionOffsetTimeMs != 0` → `!= 1`
+func TestInsertCuepoint_InsertionOffsetBoundary(t *testing.T) {
+	tests := []struct {
+		name         string
+		offsetMs     int64
+		walltimeMs   int64 // Walltime takes precedence
+		expectOffset bool
+		expectedVal  int64
+	}{
+		{"offset=0 not sent", 0, 0, false, 0},
+		{"offset=1 sent (when walltime=0)", 1, 0, true, 1},
+		{"offset=-1 (immediate) sent", CuepointInsertImmediate, 0, true, CuepointInsertImmediate},
+		{"offset ignored when walltime set", 100, 500, false, 0}, // Walltime takes precedence
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody CuepointRequest
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+				resp := Cuepoint{ID: "cue1"}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			}))
+			defer server.Close()
+
+			client := core.NewClient(core.WithBaseURL(server.URL))
+			_, err := InsertCuepoint(context.Background(), client, &InsertCuepointParams{
+				BroadcastID:           "b1",
+				InsertionOffsetTimeMs: tt.offsetMs,
+				WalltimeMs:            tt.walltimeMs,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.expectOffset && capturedBody.InsertionOffsetTimeMs != tt.expectedVal {
+				t.Errorf("InsertionOffsetTimeMs = %d, want %d", capturedBody.InsertionOffsetTimeMs, tt.expectedVal)
+			}
+			if !tt.expectOffset && tt.walltimeMs > 0 && capturedBody.WalltimeMs != tt.walltimeMs {
+				t.Errorf("WalltimeMs = %d, want %d", capturedBody.WalltimeMs, tt.walltimeMs)
+			}
+		})
+	}
+}
+
+// TestGetBroadcasts_ErrorPropagation verifies errors from API are returned.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestGetBroadcasts_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 500, "message": "Internal Server Error"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := GetBroadcasts(context.Background(), client, &GetBroadcastsParams{
+		IDs: []string{"b1"},
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestGetBroadcast_ErrorPropagation verifies GetBroadcast propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestGetBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 500, "message": "Internal Server Error"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := GetBroadcast(context.Background(), client, "b1")
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestInsertBroadcast_ErrorPropagation verifies InsertBroadcast propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestInsertBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 400, "message": "Bad Request"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	scheduledTime := time.Now().Add(1 * time.Hour)
+	result, err := InsertBroadcast(context.Background(), client, &LiveBroadcast{
+		Snippet: &BroadcastSnippet{Title: "Test", ScheduledStartTime: &scheduledTime},
+		Status:  &BroadcastStatus{PrivacyStatus: "private"},
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestUpdateBroadcast_ErrorPropagation verifies UpdateBroadcast propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestUpdateBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 403, "message": "Forbidden"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := UpdateBroadcast(context.Background(), client, &LiveBroadcast{
+		ID: "b1",
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestDeleteBroadcast_ErrorPropagation verifies DeleteBroadcast propagates errors.
+func TestDeleteBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 404, "message": "Not Found"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	err := DeleteBroadcast(context.Background(), client, "b1")
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+}
+
+// TestBindBroadcast_ErrorPropagation verifies BindBroadcast propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestBindBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 400, "message": "Bad Request"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := BindBroadcast(context.Background(), client, &BindBroadcastParams{
+		BroadcastID: "b1",
+		StreamID:    "s1",
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestTransitionBroadcast_ErrorPropagation verifies TransitionBroadcast propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestTransitionBroadcast_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 409, "message": "Conflict"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := TransitionBroadcast(context.Background(), client, "b1", TransitionLive)
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestInsertCuepoint_ErrorPropagation verifies InsertCuepoint propagates errors.
+// Kills mutant: `return nil, err` → `_ = err`
+func TestInsertCuepoint_ErrorPropagation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"code": 400, "message": "Bad Request"},
+		})
+	}))
+	defer server.Close()
+
+	client := core.NewClient(core.WithBaseURL(server.URL))
+	result, err := InsertCuepoint(context.Background(), client, &InsertCuepointParams{
+		BroadcastID: "b1",
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failed API call, got nil")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on error, got %+v", result)
+	}
+}
+
+// TestGetBroadcasts_ValidationErrors tests validation paths return errors.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestGetBroadcasts_ValidationErrors(t *testing.T) {
+	client := core.NewClient()
+
+	t.Run("nil params", func(t *testing.T) {
+		result, err := GetBroadcasts(context.Background(), client, nil)
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result on validation error, got %+v", result)
+		}
+	})
+
+	t.Run("empty IDs no mine", func(t *testing.T) {
+		result, err := GetBroadcasts(context.Background(), client, &GetBroadcastsParams{
+			IDs:  []string{},
+			Mine: false,
+		})
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result on validation error, got %+v", result)
+		}
+	})
+}
+
+// TestGetBroadcast_ValidationError_EmptyID tests empty broadcast ID returns error.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestGetBroadcast_ValidationError_EmptyID(t *testing.T) {
+	client := core.NewClient()
+	result, err := GetBroadcast(context.Background(), client, "")
+
+	if err == nil {
+		t.Fatal("expected validation error for empty broadcast ID")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on validation error, got %+v", result)
+	}
+}
+
+// TestInsertBroadcast_ValidationErrors tests all validation paths return errors.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestInsertBroadcast_ValidationErrors(t *testing.T) {
+	client := core.NewClient()
+
+	tests := []struct {
+		name      string
+		broadcast *LiveBroadcast
+	}{
+		{"nil broadcast", nil},
+		{"nil snippet", &LiveBroadcast{Status: &BroadcastStatus{}}},
+		{"empty title", &LiveBroadcast{Snippet: &BroadcastSnippet{Title: ""}, Status: &BroadcastStatus{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := InsertBroadcast(context.Background(), client, tt.broadcast)
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if result != nil {
+				t.Errorf("expected nil result on validation error, got %+v", result)
+			}
+		})
+	}
+}
+
+// TestUpdateBroadcast_ValidationErrors tests all validation paths return errors.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestUpdateBroadcast_ValidationErrors(t *testing.T) {
+	client := core.NewClient()
+
+	tests := []struct {
+		name      string
+		broadcast *LiveBroadcast
+	}{
+		{"nil broadcast", nil},
+		{"missing ID", &LiveBroadcast{Snippet: &BroadcastSnippet{Title: "Test"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := UpdateBroadcast(context.Background(), client, tt.broadcast)
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if result != nil {
+				t.Errorf("expected nil result on validation error, got %+v", result)
+			}
+		})
+	}
+}
+
+// TestDeleteBroadcast_ValidationError_EmptyID tests empty broadcast ID returns error.
+// Kills mutant: `return fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestDeleteBroadcast_ValidationError_EmptyID(t *testing.T) {
+	client := core.NewClient()
+	err := DeleteBroadcast(context.Background(), client, "")
+
+	if err == nil {
+		t.Fatal("expected validation error for empty broadcast ID")
+	}
+}
+
+// TestBindBroadcast_ValidationError_EmptyBroadcastID tests empty broadcast ID returns error.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestBindBroadcast_ValidationError_EmptyBroadcastID(t *testing.T) {
+	client := core.NewClient()
+	result, err := BindBroadcast(context.Background(), client, &BindBroadcastParams{
+		BroadcastID: "",
+		StreamID:    "s1",
+	})
+
+	if err == nil {
+		t.Fatal("expected validation error for empty broadcast ID")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on validation error, got %+v", result)
+	}
+}
+
+// TestTransitionBroadcast_ValidationErrors tests validation paths return errors.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestTransitionBroadcast_ValidationErrors(t *testing.T) {
+	client := core.NewClient()
+
+	t.Run("empty broadcast ID", func(t *testing.T) {
+		result, err := TransitionBroadcast(context.Background(), client, "", TransitionLive)
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result on validation error, got %+v", result)
+		}
+	})
+
+	t.Run("empty status", func(t *testing.T) {
+		result, err := TransitionBroadcast(context.Background(), client, "b1", "")
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result on validation error, got %+v", result)
+		}
+	})
+}
+
+// TestInsertCuepoint_ValidationError_EmptyBroadcastID tests empty broadcast ID returns error.
+// Kills mutant: `return nil, fmt.Errorf(...)` → `_ = fmt.Errorf`
+func TestInsertCuepoint_ValidationError_EmptyBroadcastID(t *testing.T) {
+	client := core.NewClient()
+	result, err := InsertCuepoint(context.Background(), client, &InsertCuepointParams{
+		BroadcastID: "",
+	})
+
+	if err == nil {
+		t.Fatal("expected validation error for empty broadcast ID")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on validation error, got %+v", result)
 	}
 }

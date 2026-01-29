@@ -6,7 +6,7 @@ on:
     branches: [main, test]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -57,3 +57,98 @@ jobs:
       - run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
           echo "## Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+
+  mutation:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Need full history for diff-base
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - name: Install mutagoph
+        run: go install github.com/its-donkey/mutagoph/cmd/mutagoph@latest
+      - name: Download existing report
+        uses: actions/download-artifact@v4
+        with:
+          name: mutation-report
+          path: .
+        continue-on-error: true  # OK if no previous report exists
+      - name: Run mutation testing
+        run: |
+          # For PRs: diff against base branch; for pushes: diff against previous commit
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            DIFF_BASE="origin/${{ github.base_ref }}"
+          else
+            DIFF_BASE="HEAD~1"
+          fi
+
+          mutagoph run \
+            -mutations mutilated \
+            -diff-base "$DIFF_BASE" \
+            -output json \
+            -output-file mutation-report-new.json \
+            -target ./...
+      - name: Merge reports
+        run: |
+          if [[ -f mutation-report.json && -f mutation-report-new.json ]]; then
+            # Merge existing and new reports
+            jq -s '{
+              timestamp: .[1].timestamp,
+              summary: {
+                TotalMutants: (.[0].summary.TotalMutants + .[1].summary.TotalMutants),
+                Killed: (.[0].summary.Killed + .[1].summary.Killed),
+                Survived: (.[0].summary.Survived + .[1].summary.Survived),
+                Timeout: (.[0].summary.Timeout + .[1].summary.Timeout),
+                Errors: (.[0].summary.Errors + .[1].summary.Errors),
+                Skipped: (.[0].summary.Skipped + .[1].summary.Skipped),
+                Naked: (.[0].summary.Naked + .[1].summary.Naked),
+                MutationScore: (((.[0].summary.Killed + .[1].summary.Killed) / (.[0].summary.TotalMutants + .[1].summary.TotalMutants)) * 100),
+                Duration: (.[0].summary.Duration + .[1].summary.Duration),
+                TestedPackages: (.[0].summary.TestedPackages + .[1].summary.TestedPackages | unique)
+              },
+              results: (.[0].results + .[1].results)
+            }' mutation-report.json mutation-report-new.json > mutation-report-merged.json
+            mv mutation-report-merged.json mutation-report.json
+          else
+            # No existing report, use new one
+            mv mutation-report-new.json mutation-report.json
+          fi
+      - name: Generate summary
+        run: |
+          SCORE=$(jq '.summary.MutationScore' mutation-report.json)
+          KILLED=$(jq '.summary.Killed' mutation-report.json)
+          SURVIVED=$(jq '.summary.Survived' mutation-report.json)
+          TOTAL=$(jq '.summary.TotalMutants' mutation-report.json)
+
+          echo "## Mutation Testing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Score** | $(printf '%.1f' $SCORE)% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Killed | $KILLED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Survived | $SURVIVED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+      - name: Upload mutation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: mutation-report.json
+          overwrite: true
+      - name: Commit mutation report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mutation-report.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update mutation testing report"
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              git push origin HEAD:${{ github.head_ref }}
+            else
+              git push
+            fi
+          fi
