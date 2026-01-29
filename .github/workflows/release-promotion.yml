@@ -120,6 +120,17 @@ jobs:
           echo "Next tag: $NEXT_TAG"
           echo "tag=$NEXT_TAG" >> $GITHUB_OUTPUT
 
+      - name: Create release branch
+        id: release_branch
+        env:
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+          SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
+        run: |
+          RELEASE_BRANCH="release/${TAG_NAME}"
+          echo "📌 Creating release branch: $RELEASE_BRANCH from $SOURCE_BRANCH"
+          git checkout -b "$RELEASE_BRANCH"
+          echo "branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
+
       - name: Update CHANGELOG version
         id: changelog
         env:
@@ -152,24 +163,17 @@ jobs:
       - name: Commit CHANGELOG update
         id: changelog_commit
         if: steps.changelog.outputs.updated == 'true'
-        continue-on-error: true
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
-          SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "Release ${TAG_NAME}: Update CHANGELOG version"
-          git push origin "$SOURCE_BRANCH"
-          echo "✅ CHANGELOG update committed to $SOURCE_BRANCH branch"
-
-      - name: Warn if CHANGELOG commit failed
-        if: steps.changelog.outputs.updated == 'true' && steps.changelog_commit.outcome == 'failure'
-        run: |
-          echo "⚠️ Could not commit CHANGELOG update (branch protection may be blocking direct pushes)"
-          echo "Please update CHANGELOG.md manually before merging the PR"
+          git push origin "$RELEASE_BRANCH"
+          echo "✅ CHANGELOG update committed to $RELEASE_BRANCH branch"
 
       - name: Create promotion PR
         id: pr
@@ -177,26 +181,27 @@ jobs:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
           SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
           TARGET_BRANCH: ${{ steps.branches.outputs.target }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          # Check if PR already exists
-          EXISTING_PR=$(gh pr list --base "$TARGET_BRANCH" --head "$SOURCE_BRANCH" --json number --jq '.[0].number' || echo "")
+          # Check if PR already exists for this release branch
+          EXISTING_PR=$(gh pr list --base "$TARGET_BRANCH" --head "$RELEASE_BRANCH" --json number --jq '.[0].number' || echo "")
 
           if [ -n "$EXISTING_PR" ]; then
-            echo "PR #$EXISTING_PR already exists for $SOURCE_BRANCH -> $TARGET_BRANCH"
+            echo "PR #$EXISTING_PR already exists for $RELEASE_BRANCH -> $TARGET_BRANCH"
             echo "URL: https://github.com/${{ github.repository }}/pull/$EXISTING_PR"
             echo "number=$EXISTING_PR" >> $GITHUB_OUTPUT
             echo "created=false" >> $GITHUB_OUTPUT
           else
-            # Create PR to merge source into target
+            # Create PR from release branch to target
             PR_TITLE="Release ${TAG_NAME}: Promote $SOURCE_BRANCH to $TARGET_BRANCH"
 
             PR_URL=$(gh pr create \
               --base "$TARGET_BRANCH" \
-              --head "$SOURCE_BRANCH" \
+              --head "$RELEASE_BRANCH" \
               --title "$PR_TITLE" \
               --body "## Summary
 
@@ -233,11 +238,10 @@ jobs:
 
       - name: Add PR link to CHANGELOG
         if: steps.pr.outputs.created == 'true'
-        continue-on-error: true
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
-          SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -261,12 +265,12 @@ jobs:
             exit 0
           fi
 
-          # Commit and push the change
+          # Commit and push the change to release branch (not protected)
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "Add PR #${PR_NUMBER} link to CHANGELOG for ${TAG_NAME}"
-          git push origin "$SOURCE_BRANCH" || echo "⚠️ Could not push PR link update (branch protection)"
+          git push origin "$RELEASE_BRANCH"
 
           echo "✅ Added PR #${PR_NUMBER} link to CHANGELOG.md"
 
@@ -276,6 +280,7 @@ jobs:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           TARGET_BRANCH: ${{ steps.branches.outputs.target }}
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -285,10 +290,11 @@ jobs:
           # Wait for any status checks to complete
           sleep 5
 
-          # Merge the PR
-          gh pr merge "$PR_NUMBER" --merge --delete-branch=false
+          # Merge the PR and delete the release branch
+          gh pr merge "$PR_NUMBER" --merge --delete-branch
 
           echo "✅ PR #${PR_NUMBER} merged to $TARGET_BRANCH"
+          echo "🗑️  Release branch $RELEASE_BRANCH deleted"
 
           # Fetch latest target branch
           git fetch origin "$TARGET_BRANCH"

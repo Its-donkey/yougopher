@@ -30,8 +30,14 @@ jobs:
               ;;
           esac
 
+          # Allow release/* branches (created by release-promotion workflow)
+          if [[ "$HEAD_REF" == release/* ]]; then
+            echo "✅ PR is from release branch '$HEAD_REF' - promotion allowed"
+            exit 0
+          fi
+
           if [ "$HEAD_REF" != "$REQUIRED_SOURCE" ]; then
-            echo "❌ PRs to '$BASE_REF' must come from the '$REQUIRED_SOURCE' branch"
+            echo "❌ PRs to '$BASE_REF' must come from the '$REQUIRED_SOURCE' branch (or release/* branches)"
             echo ""
             echo "Current source branch: $HEAD_REF"
             echo ""
