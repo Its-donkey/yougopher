@@ -274,38 +274,19 @@ jobs:
 
           echo "✅ Added PR #${PR_NUMBER} link to CHANGELOG.md"
 
-      - name: Auto-merge PR and create tag
+      - name: Enable auto-merge
         if: ${{ github.event.inputs.auto_merge == 'true' }}
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
-          TARGET_BRANCH: ${{ steps.branches.outputs.target }}
-          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-
-          echo "🔄 Merging PR #${PR_NUMBER}..."
-
-          # Wait for any status checks to complete
-          sleep 5
-
-          # Merge the PR and delete the release branch
-          gh pr merge "$PR_NUMBER" --merge --delete-branch
-
-          echo "✅ PR #${PR_NUMBER} merged to $TARGET_BRANCH"
-          echo "🗑️  Release branch $RELEASE_BRANCH deleted"
-
-          # Fetch latest target branch
-          git fetch origin "$TARGET_BRANCH"
-
-          # Create and push tag on target branch
-          echo "🏷️  Creating tag ${TAG_NAME} on $TARGET_BRANCH..."
-          git tag "$TAG_NAME" "origin/$TARGET_BRANCH"
-          git push origin "$TAG_NAME"
-
-          echo "✅ Tag ${TAG_NAME} created and pushed"
-          echo "🚀 Release workflow will be triggered automatically"
+          echo "🔄 Enabling auto-merge for PR #${PR_NUMBER}..."
+          gh pr merge "$PR_NUMBER" --auto --merge --delete-branch
+          echo "✅ Auto-merge enabled - PR will merge when CI passes"
+          echo ""
+          echo "⚠️  Note: Tag ${TAG_NAME} must be created manually after merge:"
+          echo "   git fetch origin main && git tag ${TAG_NAME} origin/main && git push origin ${TAG_NAME}"
 
   archive:
     if: ${{ github.event.inputs.action == 'archive' }}
