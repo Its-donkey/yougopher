@@ -1065,3 +1065,114 @@ func TestChatBotClient_Close_Idempotent(t *testing.T) {
 	_ = bot.Close()
 	_ = bot.Close()
 }
+
+func TestWithTokenRefreshInterval(t *testing.T) {
+	client := core.NewClient()
+
+	t.Run("custom interval", func(t *testing.T) {
+		bot, _ := NewChatBotClient(client, nil, "chat123",
+			WithTokenRefreshInterval(30*time.Minute),
+		)
+		if bot.refreshInterval != 30*time.Minute {
+			t.Errorf("refreshInterval = %v, want 30m", bot.refreshInterval)
+		}
+	})
+
+	t.Run("disable auto-refresh", func(t *testing.T) {
+		bot, _ := NewChatBotClient(client, nil, "chat123",
+			WithTokenRefreshInterval(0),
+		)
+		if bot.refreshInterval != 0 {
+			t.Errorf("refreshInterval = %v, want 0", bot.refreshInterval)
+		}
+	})
+
+	t.Run("default interval", func(t *testing.T) {
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+		if bot.refreshInterval != 45*time.Minute {
+			t.Errorf("refreshInterval = %v, want 45m", bot.refreshInterval)
+		}
+	})
+}
+
+func TestChatBotClient_Delete_Error(t *testing.T) {
+	t.Run("empty message ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.Delete(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty message ID")
+		}
+	})
+}
+
+func TestChatBotClient_Ban_Error(t *testing.T) {
+	t.Run("empty channel ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.Ban(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty channel ID")
+		}
+	})
+}
+
+func TestChatBotClient_Timeout_Error(t *testing.T) {
+	t.Run("empty channel ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.Timeout(context.Background(), "", 300)
+		if err == nil {
+			t.Fatal("expected error for empty channel ID")
+		}
+	})
+
+	t.Run("invalid duration", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.Timeout(context.Background(), "user123", 0)
+		if err == nil {
+			t.Fatal("expected error for zero duration")
+		}
+	})
+}
+
+func TestChatBotClient_Unban_Error(t *testing.T) {
+	t.Run("empty ban ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.Unban(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty ban ID")
+		}
+	})
+}
+
+func TestChatBotClient_AddModerator_Error(t *testing.T) {
+	t.Run("empty channel ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.AddModerator(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty channel ID")
+		}
+	})
+}
+
+func TestChatBotClient_RemoveModerator_Error(t *testing.T) {
+	t.Run("empty moderator ID", func(t *testing.T) {
+		client := core.NewClient()
+		bot, _ := NewChatBotClient(client, nil, "chat123")
+
+		err := bot.RemoveModerator(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty moderator ID")
+		}
+	})
+}

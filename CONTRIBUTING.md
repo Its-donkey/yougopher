@@ -30,6 +30,13 @@ Thank you for your interest in contributing to Yougopher!
 - Use `httptest.Server` for HTTP mocking
 - Target 90% coverage
 
+### Mutation Testing
+- CI runs mutation testing with [mutagoph](https://github.com/Its-donkey/mutagoph)
+- Uses diff-based testing: only mutates changed Go files
+- Mutation reports are merged incrementally across PRs
+- Local testing: `go install github.com/its-donkey/mutagoph/cmd/mutagoph@latest`
+- Run locally: `mutagoph run -mutations standard -target ./...`
+
 ### Documentation
 - All exported types, functions, and methods must have GoDoc comments
 - Package-level documentation in `doc.go`
