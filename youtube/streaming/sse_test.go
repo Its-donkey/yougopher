@@ -934,7 +934,7 @@ func TestLiveChatStream_ResetClearsState(t *testing.T) {
 	stream.SetAccessToken("access123")
 
 	// Reset
-	stream.Reset()
+	_ = stream.Reset()
 
 	if stream.PageToken() != "" {
 		t.Errorf("PageToken() after reset = %q, want empty", stream.PageToken())
