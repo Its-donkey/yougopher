@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-01-29T03:58:11.334918332Z",
+  "timestamp": "2026-01-29T04:09:56.202992656Z",
   "summary": {
-    "TotalMutants": 6,
+    "TotalMutants": 12,
     "Killed": 0,
-    "Survived": 6,
+    "Survived": 12,
     "Timeout": 0,
     "Errors": 0,
     "Skipped": 0,
     "Naked": 0,
     "MutationScore": 0,
-    "Duration": 68387941514,
+    "Duration": 134494932103,
     "TestedPackages": [
       "github.com/Its-donkey/yougopher/docs/examples/analytics",
       "github.com/Its-donkey/yougopher/docs/examples/chatbot",
@@ -111,11 +111,96 @@
         "mutated": "1",
         "description": "replace 2 with 1"
       }
+    },
+    {
+      "status": "survived",
+      "duration": "5.379282452s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.135s\n",
+      "mutation": {
+        "id": "da30396592cf9b5b",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "arithmetic_replace",
+        "original": "2 * time.Second",
+        "mutated": "2 / time.Second",
+        "description": "replace * with /"
+      }
+    },
+    {
+      "status": "survived",
+      "duration": "5.433288869s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.132s\n",
+      "mutation": {
+        "id": "50adc189e6d32d57",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "arithmetic_replace",
+        "original": "2 * time.Second",
+        "mutated": "2 + time.Second",
+        "description": "replace * with +"
+      }
+    },
+    {
+      "status": "survived",
+      "duration": "5.461064273s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.120s\n",
+      "mutation": {
+        "id": "b97992b67a8ba525",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "arithmetic_delete",
+        "original": "2 * time.Second",
+        "mutated": "time.Second",
+        "description": "delete left operand of *"
+      }
+    },
+    {
+      "status": "survived",
+      "duration": "5.452282767s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.106s\n",
+      "mutation": {
+        "id": "67ae62d8e956d47a",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "arithmetic_delete",
+        "original": "2 * time.Second",
+        "mutated": "2",
+        "description": "delete right operand of *"
+      }
+    },
+    {
+      "status": "survived",
+      "duration": "5.498102505s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.088s\n",
+      "mutation": {
+        "id": "7e6cd5307a9e0aa8",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "literal_replace",
+        "original": "2",
+        "mutated": "3",
+        "description": "replace 2 with 3"
+      }
+    },
+    {
+      "status": "survived",
+      "duration": "5.444743676s",
+      "output": "ok  \tgithub.com/Its-donkey/yougopher/youtube/streaming\t4.086s\n",
+      "mutation": {
+        "id": "3b97d11d67b65ed1",
+        "file": "/home/runner/work/yougopher/yougopher/youtube/streaming/poller.go",
+        "line": 26,
+        "column": 27,
+        "operator": "literal_replace",
+        "original": "2",
+        "mutated": "1",
+        "description": "replace 2 with 1"
+      }
     }
-  ],
-  "config": {
-    "mutations": "mutilated",
-    "parallelism": "dynamic",
-    "target": "./..."
-  }
+  ]
 }
