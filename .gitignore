@@ -1,6 +1,7 @@
 # Hidden directories (except .git*)
 .*
 !.git*
+scripts/
 
 # Binaries
 *.exe
@@ -28,6 +29,7 @@ vendor/
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS
 Thumbs.db
@@ -41,3 +43,4 @@ token.json
 # Build output
 dist/
 bin/
+
