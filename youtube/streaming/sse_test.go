@@ -728,3 +728,215 @@ func TestParseUint(t *testing.T) {
 		})
 	}
 }
+
+func TestWithStreamHTTPClient(t *testing.T) {
+	client := core.NewClient()
+
+	t.Run("custom HTTP client", func(t *testing.T) {
+		customHTTP := &http.Client{Timeout: 30 * time.Second}
+		stream := NewLiveChatStream(client, "chat123",
+			WithStreamHTTPClient(customHTTP),
+		)
+		if stream.httpClient != customHTTP {
+			t.Error("custom HTTP client was not set")
+		}
+	})
+
+	t.Run("nil HTTP client keeps default", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123",
+			WithStreamHTTPClient(nil),
+		)
+		if stream.httpClient == nil {
+			t.Error("HTTP client should not be nil")
+		}
+	})
+}
+
+func TestLiveChatStream_QuotaMethods(t *testing.T) {
+	t.Run("quotaUsed without tracker", func(t *testing.T) {
+		client := core.NewClient()
+		stream := NewLiveChatStream(client, "chat123")
+
+		used := stream.quotaUsed()
+		if used != 0 {
+			t.Errorf("quotaUsed() = %d, want 0", used)
+		}
+	})
+
+	t.Run("quotaLimit without tracker", func(t *testing.T) {
+		client := core.NewClient()
+		stream := NewLiveChatStream(client, "chat123")
+
+		limit := stream.quotaLimit()
+		if limit != core.DefaultDailyQuota {
+			t.Errorf("quotaLimit() = %d, want %d", limit, core.DefaultDailyQuota)
+		}
+	})
+
+	t.Run("with quota tracker", func(t *testing.T) {
+		qt := core.NewQuotaTracker(core.DefaultDailyQuota)
+		client := core.NewClient(core.WithQuotaTracker(qt))
+		stream := NewLiveChatStream(client, "chat123")
+
+		// Initial values
+		if stream.quotaUsed() != 0 {
+			t.Errorf("quotaUsed() = %d, want 0", stream.quotaUsed())
+		}
+		if stream.quotaLimit() != core.DefaultDailyQuota {
+			t.Errorf("quotaLimit() = %d, want %d", stream.quotaLimit(), core.DefaultDailyQuota)
+		}
+	})
+}
+
+func TestLiveChatStream_HandlerUnsubscribe(t *testing.T) {
+	client := core.NewClient()
+
+	t.Run("OnDelete unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnDelete(func(id string) {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.deleteHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("delete handler count = %d, want 1", count)
+		}
+
+		unsub()
+		unsub() // Double unsubscribe should be safe
+
+		stream.handlerMu.RLock()
+		count = len(stream.deleteHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("delete handler count after unsub = %d, want 0", count)
+		}
+	})
+
+	t.Run("OnBan unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnBan(func(details *UserBannedDetails) {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.banHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("ban handler count = %d, want 1", count)
+		}
+
+		unsub()
+
+		stream.handlerMu.RLock()
+		count = len(stream.banHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("ban handler count after unsub = %d, want 0", count)
+		}
+	})
+
+	t.Run("OnError unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnError(func(err error) {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.errorHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("error handler count = %d, want 1", count)
+		}
+
+		unsub()
+
+		stream.handlerMu.RLock()
+		count = len(stream.errorHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("error handler count after unsub = %d, want 0", count)
+		}
+	})
+
+	t.Run("OnConnect unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnConnect(func() {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.connectHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("connect handler count = %d, want 1", count)
+		}
+
+		unsub()
+
+		stream.handlerMu.RLock()
+		count = len(stream.connectHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("connect handler count after unsub = %d, want 0", count)
+		}
+	})
+
+	t.Run("OnDisconnect unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnDisconnect(func() {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.disconnectHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("disconnect handler count = %d, want 1", count)
+		}
+
+		unsub()
+
+		stream.handlerMu.RLock()
+		count = len(stream.disconnectHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("disconnect handler count after unsub = %d, want 0", count)
+		}
+	})
+
+	t.Run("OnResponse unsubscribe", func(t *testing.T) {
+		stream := NewLiveChatStream(client, "chat123")
+
+		unsub := stream.OnResponse(func(resp *LiveChatMessageListResponse) {})
+
+		stream.handlerMu.RLock()
+		count := len(stream.responseHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 1 {
+			t.Errorf("response handler count = %d, want 1", count)
+		}
+
+		unsub()
+
+		stream.handlerMu.RLock()
+		count = len(stream.responseHandlers)
+		stream.handlerMu.RUnlock()
+		if count != 0 {
+			t.Errorf("response handler count after unsub = %d, want 0", count)
+		}
+	})
+}
+
+func TestLiveChatStream_ResetClearsState(t *testing.T) {
+	client := core.NewClient()
+	stream := NewLiveChatStream(client, "chat123")
+
+	// Set some state
+	stream.SetPageToken("token123")
+	stream.SetAccessToken("access123")
+
+	// Reset
+	_ = stream.Reset()
+
+	if stream.PageToken() != "" {
+		t.Errorf("PageToken() after reset = %q, want empty", stream.PageToken())
+	}
+}
