@@ -96,15 +96,15 @@ func TestLiveChatMessage_Message(t *testing.T) {
 
 func TestLiveChatMessage_TypeCheckers(t *testing.T) {
 	tests := []struct {
-		name               string
-		msgType            string
-		isText             bool
-		isSuperChat        bool
-		isSuperSticker     bool
-		isMembership       bool
-		isMemberMilestone  bool
-		isGiftMembership   bool
-		isPoll             bool
+		name              string
+		msgType           string
+		isText            bool
+		isSuperChat       bool
+		isSuperSticker    bool
+		isMembership      bool
+		isMemberMilestone bool
+		isGiftMembership  bool
+		isPoll            bool
 	}{
 		{
 			name:    "text message",
@@ -787,9 +787,9 @@ func TestLiveChatMessage_IsPoll(t *testing.T) {
 
 func TestLiveChatMessage_HasActivePoll(t *testing.T) {
 	tests := []struct {
-		name    string
-		msg     *LiveChatMessage
-		want    bool
+		name string
+		msg  *LiveChatMessage
+		want bool
 	}{
 		{
 			name: "nil snippet",
@@ -971,4 +971,203 @@ func TestActivePollItem_JSON(t *testing.T) {
 	if len(poll.Snippet.PollDetails.Choices) != 3 {
 		t.Errorf("len(Choices) = %d, want 3", len(poll.Snippet.PollDetails.Choices))
 	}
+}
+
+func TestCloneFunctions_NilInputs(t *testing.T) {
+	t.Run("cloneSuperChatDetails nil", func(t *testing.T) {
+		result := cloneSuperChatDetails(nil)
+		if result != nil {
+			t.Error("cloneSuperChatDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneSuperStickerMetadata nil", func(t *testing.T) {
+		result := cloneSuperStickerMetadata(nil)
+		if result != nil {
+			t.Error("cloneSuperStickerMetadata(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneMemberMilestoneChatDetails nil", func(t *testing.T) {
+		result := cloneMemberMilestoneChatDetails(nil)
+		if result != nil {
+			t.Error("cloneMemberMilestoneChatDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneNewSponsorDetails nil", func(t *testing.T) {
+		result := cloneNewSponsorDetails(nil)
+		if result != nil {
+			t.Error("cloneNewSponsorDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneMembershipGiftingDetails nil", func(t *testing.T) {
+		result := cloneMembershipGiftingDetails(nil)
+		if result != nil {
+			t.Error("cloneMembershipGiftingDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneGiftMembershipReceivedDetails nil", func(t *testing.T) {
+		result := cloneGiftMembershipReceivedDetails(nil)
+		if result != nil {
+			t.Error("cloneGiftMembershipReceivedDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneMessageDeletedDetails nil", func(t *testing.T) {
+		result := cloneMessageDeletedDetails(nil)
+		if result != nil {
+			t.Error("cloneMessageDeletedDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneBannedUserDetails nil", func(t *testing.T) {
+		result := cloneBannedUserDetails(nil)
+		if result != nil {
+			t.Error("cloneBannedUserDetails(nil) should return nil")
+		}
+	})
+
+	t.Run("cloneFanFundingEventDetails nil", func(t *testing.T) {
+		result := cloneFanFundingEventDetails(nil)
+		if result != nil {
+			t.Error("cloneFanFundingEventDetails(nil) should return nil")
+		}
+	})
+}
+
+func TestCloneFunctions_WithData(t *testing.T) {
+	t.Run("cloneSuperChatDetails with data", func(t *testing.T) {
+		original := &SuperChatDetails{
+			AmountMicros:        5000000,
+			Currency:            "USD",
+			AmountDisplayString: "$5.00",
+			Tier:                2,
+		}
+		result := cloneSuperChatDetails(original)
+		if result == original {
+			t.Error("cloneSuperChatDetails should return a copy, not the same pointer")
+		}
+		if result.AmountMicros != original.AmountMicros {
+			t.Errorf("AmountMicros = %d, want %d", result.AmountMicros, original.AmountMicros)
+		}
+	})
+
+	t.Run("cloneSuperStickerMetadata with data", func(t *testing.T) {
+		original := &SuperStickerMetadata{
+			StickerID:       "sticker123",
+			AltText:         "Happy sticker",
+			AltTextLanguage: "en",
+		}
+		result := cloneSuperStickerMetadata(original)
+		if result == original {
+			t.Error("cloneSuperStickerMetadata should return a copy, not the same pointer")
+		}
+		if result.StickerID != original.StickerID {
+			t.Errorf("StickerID = %q, want %q", result.StickerID, original.StickerID)
+		}
+	})
+
+	t.Run("cloneMemberMilestoneChatDetails with data", func(t *testing.T) {
+		original := &MemberMilestoneChatDetails{
+			MemberMonth: 12,
+			UserComment: "12 months!",
+		}
+		result := cloneMemberMilestoneChatDetails(original)
+		if result == original {
+			t.Error("cloneMemberMilestoneChatDetails should return a copy, not the same pointer")
+		}
+		if result.MemberMonth != original.MemberMonth {
+			t.Errorf("MemberMonth = %d, want %d", result.MemberMonth, original.MemberMonth)
+		}
+	})
+
+	t.Run("cloneNewSponsorDetails with data", func(t *testing.T) {
+		original := &NewSponsorDetails{
+			MemberLevelName: "Gold Member",
+			IsUpgrade:       true,
+		}
+		result := cloneNewSponsorDetails(original)
+		if result == original {
+			t.Error("cloneNewSponsorDetails should return a copy, not the same pointer")
+		}
+		if result.MemberLevelName != original.MemberLevelName {
+			t.Errorf("MemberLevelName = %q, want %q", result.MemberLevelName, original.MemberLevelName)
+		}
+	})
+
+	t.Run("cloneMembershipGiftingDetails with data", func(t *testing.T) {
+		original := &MembershipGiftingDetails{
+			GiftMembershipsCount: 5,
+			MemberLevelName:      "Gold",
+		}
+		result := cloneMembershipGiftingDetails(original)
+		if result == original {
+			t.Error("cloneMembershipGiftingDetails should return a copy, not the same pointer")
+		}
+		if result.GiftMembershipsCount != original.GiftMembershipsCount {
+			t.Errorf("GiftMembershipsCount = %d, want %d", result.GiftMembershipsCount, original.GiftMembershipsCount)
+		}
+	})
+
+	t.Run("cloneGiftMembershipReceivedDetails with data", func(t *testing.T) {
+		original := &GiftMembershipReceivedDetails{
+			MemberLevelName:                      "Gold",
+			GifterChannelID:                      "channel123",
+			AssociatedMembershipGiftingMessageID: "gift123",
+		}
+		result := cloneGiftMembershipReceivedDetails(original)
+		if result == original {
+			t.Error("cloneGiftMembershipReceivedDetails should return a copy, not the same pointer")
+		}
+		if result.GifterChannelID != original.GifterChannelID {
+			t.Errorf("GifterChannelID = %q, want %q", result.GifterChannelID, original.GifterChannelID)
+		}
+	})
+
+	t.Run("cloneMessageDeletedDetails with data", func(t *testing.T) {
+		original := &MessageDeletedDetails{
+			DeletedMessageID: "msg123",
+		}
+		result := cloneMessageDeletedDetails(original)
+		if result == original {
+			t.Error("cloneMessageDeletedDetails should return a copy, not the same pointer")
+		}
+		if result.DeletedMessageID != original.DeletedMessageID {
+			t.Errorf("DeletedMessageID = %q, want %q", result.DeletedMessageID, original.DeletedMessageID)
+		}
+	})
+
+	t.Run("cloneBannedUserDetails with data", func(t *testing.T) {
+		original := &BannedUserDetails{
+			ChannelID:   "channel123",
+			ChannelURL:  "https://youtube.com/channel/channel123",
+			DisplayName: "Banned User",
+		}
+		result := cloneBannedUserDetails(original)
+		if result == original {
+			t.Error("cloneBannedUserDetails should return a copy, not the same pointer")
+		}
+		if result.ChannelID != original.ChannelID {
+			t.Errorf("ChannelID = %q, want %q", result.ChannelID, original.ChannelID)
+		}
+	})
+
+	t.Run("cloneFanFundingEventDetails with data", func(t *testing.T) {
+		original := &FanFundingEventDetails{
+			AmountMicros:        10000000,
+			Currency:            "EUR",
+			AmountDisplayString: "€10.00",
+			UserComment:         "Great stream!",
+		}
+		result := cloneFanFundingEventDetails(original)
+		if result == original {
+			t.Error("cloneFanFundingEventDetails should return a copy, not the same pointer")
+		}
+		if result.AmountMicros != original.AmountMicros {
+			t.Errorf("AmountMicros = %d, want %d", result.AmountMicros, original.AmountMicros)
+		}
+	})
 }

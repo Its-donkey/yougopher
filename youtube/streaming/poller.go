@@ -23,7 +23,7 @@ const (
 
 // Default polling configuration.
 const (
-	DefaultMinPollInterval = 1 * time.Second
+	DefaultMinPollInterval = 2 * time.Second
 	DefaultMaxPollInterval = 30 * time.Second
 )
 
