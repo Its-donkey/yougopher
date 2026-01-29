@@ -82,3 +82,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core: InvalidTransitionError for broadcast state transition errors
 - Core: StreamNotHealthyError for stream health issues
 - Core: StreamNotBoundError for unbound broadcast errors
+- CI: Mutation testing with mutagoph (diff-based incremental testing)
+- CI: Mutation report merging and GitHub Actions summary
+- Tests: Mutation-killing tests for streaming package
