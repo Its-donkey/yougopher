@@ -67,7 +67,7 @@ jobs:
           fetch-depth: 0  # Need full history for diff-base
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
+          go-version: '1.25'
       - name: Install mutagoph
         run: go install github.com/its-donkey/mutagoph/cmd/mutagoph@latest
       - name: Download existing report
