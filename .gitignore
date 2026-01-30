@@ -20,6 +20,10 @@ scripts/
 coverage.out
 coverage.html
 
+# Mutation testing reports
+mutation-report.*
+report.html
+
 # Go workspace
 go.work
 go.work.sum
