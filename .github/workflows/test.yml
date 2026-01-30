@@ -69,6 +69,12 @@ jobs:
         with:
           name: coverage-out
           path: coverage.out
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          fail_ci_if_error: false
 
   mutation:
     name: Mutation Testing (diff-based)
