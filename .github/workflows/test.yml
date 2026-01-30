@@ -187,11 +187,12 @@ jobs:
   update-results:
     name: Update Test Results
     needs: [coverage, mutation]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/test' }}
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
@@ -239,22 +240,13 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create PR with updated results
+      - name: Commit test results to PR branch
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          BRANCH="chore/test-results-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH"
           git add docs/test-results.json
           git commit -m "chore: update test results"
-          git push origin "$BRANCH"
-
-          gh pr create \
-            --base test \
-            --head "$BRANCH" \
-            --title "chore: update test results" \
-            --body "Automated test results update from CI."
+          git push origin HEAD:${{ github.head_ref }}
