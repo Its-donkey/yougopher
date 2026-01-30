@@ -1,0 +1,19 @@
+{
+  "coverage": {
+    "total": null,
+    "packages": {},
+    "lastUpdated": null
+  },
+  "mutation": {
+    "summary": {
+      "MutationScore": null,
+      "TotalMutants": 0,
+      "Killed": 0,
+      "Survived": 0,
+      "Timeout": 0,
+      "Errors": 0
+    },
+    "results": [],
+    "lastUpdated": null
+  }
+}

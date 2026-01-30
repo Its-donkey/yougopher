@@ -4,59 +4,31 @@ title: Test Results
 description: Code coverage and mutation testing results for Yougopher.
 ---
 
-## Overview
+## Interactive Results
 
-This page tracks test quality metrics for Yougopher.
+View the full interactive test results: **[Test Results Viewer](test-results.html)**
 
-## Code Coverage
+The viewer displays:
+- Code coverage by package
+- Mutation testing score and details
+- Per-file mutation results with filtering
 
-| Package | Coverage | Status |
-|---------|----------|--------|
-| `youtube/core` | - | - |
-| `youtube/auth` | - | - |
-| `youtube/streaming` | - | - |
-| `youtube/data` | - | - |
-| `youtube/analytics` | - | - |
+## Running Tests Locally
 
-**Last updated:** -
-
-### Running Coverage Locally
+### Coverage
 
 ```bash
 # Generate coverage report
 go test -coverprofile=coverage.out ./...
 
-# View coverage summary
+# View summary
 go tool cover -func=coverage.out
 
 # Generate HTML report
 go tool cover -html=coverage.out -o coverage.html
 ```
 
-## Mutation Testing
-
-Mutation testing measures test effectiveness by introducing bugs (mutants) and checking if tests catch them.
-
-| Metric | Value |
-|--------|-------|
-| Mutation Score | - |
-| Total Mutants | - |
-| Killed | - |
-| Survived | - |
-| Timeout | - |
-
-**Last updated:** -
-
-### Mutation Levels
-
-| Level | Mutators | Use Case |
-|-------|----------|----------|
-| `lite` | Basic operators | Quick CI checks |
-| `standard` | Common patterns | Default for PRs |
-| `thorough` | Extended set | Pre-release validation |
-| `mutilated` | All mutators | Comprehensive analysis |
-
-### Running Mutation Tests Locally
+### Mutation Testing
 
 ```bash
 # Install mutagoph
@@ -72,10 +44,14 @@ mutagoph run -target ./... --dynamic-level standard
 mutagoph run -target ./... --output html --output-file mutation-report.html
 ```
 
-### Viewing Reports
+## Mutation Levels
 
-- **JSON reports:** Download from GitHub Actions artifacts
-- **HTML viewer:** Open [mutation-report.html](../mutation-report.html) and load the JSON
+| Level | Mutators | Use Case |
+|-------|----------|----------|
+| `lite` | Basic operators | Quick CI checks |
+| `standard` | Common patterns | Default for PRs |
+| `thorough` | Extended set | Pre-release validation |
+| `mutilated` | All mutators | Comprehensive analysis |
 
 ## CI Integration
 
@@ -90,9 +66,10 @@ Tests run automatically on:
 | Test | Always | Run tests with race detector |
 | Lint | Always | golangci-lint checks |
 | Build | Always | Verify compilation |
-| Coverage | Always | Generate coverage summary |
+| Coverage | Always | Generate coverage report |
 | Mutation (diff) | Push/PR | Test changed files only |
 | Mutation (full) | Manual | Full codebase analysis |
+| Update Results | Push to test | Merge and commit results |
 
 ### Triggering Full Mutation Testing
 
@@ -101,5 +78,3 @@ Tests run automatically on:
 3. Click "Run workflow"
 4. Check "Run full mutation testing"
 5. Click "Run workflow"
-
-The full mutation test creates a PR with the HTML report when complete.
