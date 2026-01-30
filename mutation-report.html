@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mutation Testing Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        h1 { margin-bottom: 20px; color: #fff; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat { background: #16213e; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .stat-label { color: #888; font-size: 0.9em; margin-top: 5px; }
+        .score { color: #4ade80; }
+        .killed { color: #4ade80; }
+        .survived { color: #f87171; }
+        .timeout { color: #fbbf24; }
+        .error { color: #f87171; }
+        .results { margin-top: 20px; }
+        .file { background: #16213e; margin-bottom: 10px; border-radius: 8px; overflow: hidden; }
+        .file-header { padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .file-header:hover { background: #1e3a5f; }
+        .file-name { font-weight: bold; font-family: monospace; }
+        .file-stats { display: flex; gap: 15px; font-size: 0.9em; }
+        .file-stats span { padding: 2px 8px; border-radius: 4px; }
+        .mutants { display: none; padding: 0 15px 15px; }
+        .mutants.open { display: block; }
+        .mutant { background: #0f1729; padding: 10px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #888; }
+        .mutant.killed { border-left-color: #4ade80; }
+        .mutant.survived { border-left-color: #f87171; }
+        .mutant.timeout { border-left-color: #fbbf24; }
+        .mutant-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .mutant-type { font-weight: bold; }
+        .mutant-status { padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
+        .mutant-status.killed { background: #166534; }
+        .mutant-status.survived { background: #991b1b; }
+        .mutant-status.timeout { background: #92400e; }
+        .mutant-location { font-family: monospace; color: #888; font-size: 0.85em; }
+        .mutant-diff { margin-top: 10px; font-family: monospace; font-size: 0.85em; background: #000; padding: 10px; border-radius: 4px; white-space: pre-wrap; overflow-x: auto; }
+        .diff-old { color: #f87171; }
+        .diff-new { color: #4ade80; }
+        .filter-bar { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; background: #16213e; color: #eee; }
+        .filter-btn.active { background: #3b82f6; }
+        .filter-btn:hover { background: #1e3a5f; }
+        .no-data { text-align: center; padding: 50px; color: #888; }
+        #dropzone { border: 2px dashed #444; padding: 40px; text-align: center; margin-bottom: 20px; border-radius: 8px; }
+        #dropzone.dragover { border-color: #3b82f6; background: #1e3a5f; }
+        #report { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Mutation Testing Report</h1>
+
+    <div id="dropzone">
+        <p>Drop mutation-report.json here or <label style="color: #3b82f6; cursor: pointer;"><input type="file" id="fileInput" accept=".json" style="display: none;">click to upload</label></p>
+    </div>
+
+    <div id="report">
+        <div class="summary" id="summary"></div>
+
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="killed">Killed</button>
+            <button class="filter-btn" data-filter="survived">Survived</button>
+            <button class="filter-btn" data-filter="timeout">Timeout</button>
+        </div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        let reportData = null;
+        let currentFilter = 'all';
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const report = document.getElementById('report');
+
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) loadFile(file);
+        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderResults();
+            });
+        });
+
+        function loadFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    reportData = JSON.parse(e.target.result);
+                    dropzone.style.display = 'none';
+                    report.style.display = 'block';
+                    renderReport();
+                } catch (err) {
+                    alert('Invalid JSON file');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderReport() {
+            const summary = reportData.summary || {};
+            const score = summary.MutationScore || 0;
+
+            document.getElementById('summary').innerHTML = `
+                <div class="stat"><div class="stat-value score">${score.toFixed(1)}%</div><div class="stat-label">Mutation Score</div></div>
+                <div class="stat"><div class="stat-value">${summary.TotalMutants || 0}</div><div class="stat-label">Total Mutants</div></div>
+                <div class="stat"><div class="stat-value killed">${summary.Killed || 0}</div><div class="stat-label">Killed</div></div>
+                <div class="stat"><div class="stat-value survived">${summary.Survived || 0}</div><div class="stat-label">Survived</div></div>
+                <div class="stat"><div class="stat-value timeout">${summary.Timeout || 0}</div><div class="stat-label">Timeout</div></div>
+                <div class="stat"><div class="stat-value error">${summary.Errors || 0}</div><div class="stat-label">Errors</div></div>
+            `;
+            renderResults();
+        }
+
+        function renderResults() {
+            const results = reportData.results || [];
+            const fileMap = new Map();
+
+            results.forEach(r => {
+                const file = r.file || r.File || 'unknown';
+                if (!fileMap.has(file)) fileMap.set(file, []);
+                fileMap.get(file).push(r);
+            });
+
+            let html = '';
+            fileMap.forEach((mutants, file) => {
+                const filtered = currentFilter === 'all' ? mutants : mutants.filter(m => (m.status || m.Status || '').toLowerCase() === currentFilter);
+                if (filtered.length === 0) return;
+
+                const killed = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'killed').length;
+                const survived = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'survived').length;
+                const timeout = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'timeout').length;
+
+                html += `
+                    <div class="file">
+                        <div class="file-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                            <span class="file-name">${file}</span>
+                            <div class="file-stats">
+                                <span class="killed">${killed} killed</span>
+                                <span class="survived">${survived} survived</span>
+                                ${timeout ? `<span class="timeout">${timeout} timeout</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="mutants">
+                            ${filtered.map(m => renderMutant(m)).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('results').innerHTML = html || '<div class="no-data">No mutants to display</div>';
+        }
+
+        function renderMutant(m) {
+            const status = (m.status || m.Status || 'unknown').toLowerCase();
+            const type = m.mutator || m.Mutator || m.type || m.Type || 'Unknown';
+            const line = m.line || m.Line || '?';
+            const col = m.column || m.Column || '?';
+            const original = m.original || m.Original || '';
+            const mutated = m.mutated || m.Mutated || '';
+
+            return `
+                <div class="mutant ${status}">
+                    <div class="mutant-header">
+                        <span class="mutant-type">${type}</span>
+                        <span class="mutant-status ${status}">${status.toUpperCase()}</span>
+                    </div>
+                    <div class="mutant-location">Line ${line}, Column ${col}</div>
+                    ${original || mutated ? `
+                        <div class="mutant-diff">
+                            ${original ? `<div class="diff-old">- ${escapeHtml(original)}</div>` : ''}
+                            ${mutated ? `<div class="diff-new">+ ${escapeHtml(mutated)}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Try to auto-load mutation-report.json from same directory
+        fetch('mutation-report.json')
+            .then(r => r.json())
+            .then(data => {
+                reportData = data;
+                dropzone.style.display = 'none';
+                report.style.display = 'block';
+                renderReport();
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>
