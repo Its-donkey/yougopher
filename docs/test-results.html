@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Results - Yougopher</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { margin-bottom: 10px; color: #fff; }
+        h2 { margin: 30px 0 15px; color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .subtitle { color: #888; margin-bottom: 30px; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat { background: #16213e; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .stat-label { color: #888; font-size: 0.9em; margin-top: 5px; }
+        .score-high { color: #4ade80; }
+        .score-med { color: #fbbf24; }
+        .score-low { color: #f87171; }
+        .killed { color: #4ade80; }
+        .survived { color: #f87171; }
+        .timeout { color: #fbbf24; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        th { background: #16213e; color: #fff; }
+        tr:hover { background: #16213e; }
+        .file { background: #16213e; margin-bottom: 10px; border-radius: 8px; overflow: hidden; }
+        .file-header { padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .file-header:hover { background: #1e3a5f; }
+        .file-name { font-weight: bold; font-family: monospace; font-size: 0.9em; }
+        .file-stats { display: flex; gap: 15px; font-size: 0.85em; }
+        .mutants { display: none; padding: 0 15px 15px; }
+        .mutants.open { display: block; }
+        .mutant { background: #0f1729; padding: 10px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #888; font-size: 0.9em; }
+        .mutant.killed { border-left-color: #4ade80; }
+        .mutant.survived { border-left-color: #f87171; }
+        .mutant.timeout { border-left-color: #fbbf24; }
+        .mutant-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .mutant-type { font-weight: bold; }
+        .mutant-status { padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
+        .mutant-status.killed { background: #166534; }
+        .mutant-status.survived { background: #991b1b; }
+        .mutant-status.timeout { background: #92400e; }
+        .mutant-location { font-family: monospace; color: #888; font-size: 0.85em; }
+        .mutant-diff { margin-top: 8px; font-family: monospace; font-size: 0.8em; background: #000; padding: 8px; border-radius: 4px; white-space: pre-wrap; }
+        .diff-old { color: #f87171; }
+        .diff-new { color: #4ade80; }
+        .filter-bar { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; background: #16213e; color: #eee; }
+        .filter-btn.active { background: #3b82f6; }
+        .filter-btn:hover { background: #1e3a5f; }
+        .no-data { text-align: center; padding: 40px; color: #666; background: #16213e; border-radius: 8px; }
+        .timestamp { color: #666; font-size: 0.85em; }
+        .back-link { color: #3b82f6; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .section { margin-bottom: 40px; }
+    </style>
+</head>
+<body>
+    <p><a href="./" class="back-link">&larr; Back to Documentation</a></p>
+    <h1>Test Results</h1>
+    <p class="subtitle">Code coverage and mutation testing metrics for Yougopher</p>
+
+    <div class="section">
+        <h2>Coverage</h2>
+        <div id="coverage-summary" class="summary"></div>
+        <table id="coverage-table">
+            <thead>
+                <tr><th>Package</th><th>Coverage</th><th>Status</th></tr>
+            </thead>
+            <tbody id="coverage-body"></tbody>
+        </table>
+        <p class="timestamp" id="coverage-updated"></p>
+    </div>
+
+    <div class="section">
+        <h2>Mutation Testing</h2>
+        <div id="mutation-summary" class="summary"></div>
+        <p class="timestamp" id="mutation-updated"></p>
+
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="killed">Killed</button>
+            <button class="filter-btn" data-filter="survived">Survived</button>
+            <button class="filter-btn" data-filter="timeout">Timeout</button>
+        </div>
+
+        <div id="mutation-results"></div>
+    </div>
+
+    <script>
+        let data = null;
+        let currentFilter = 'all';
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderMutationResults();
+            });
+        });
+
+        function getScoreClass(score) {
+            if (score >= 80) return 'score-high';
+            if (score >= 60) return 'score-med';
+            return 'score-low';
+        }
+
+        function getCoverageStatus(pct) {
+            if (pct >= 80) return '<span class="score-high">Good</span>';
+            if (pct >= 60) return '<span class="score-med">Fair</span>';
+            return '<span class="score-low">Low</span>';
+        }
+
+        function renderCoverage() {
+            const cov = data.coverage;
+            const summaryEl = document.getElementById('coverage-summary');
+            const bodyEl = document.getElementById('coverage-body');
+            const updatedEl = document.getElementById('coverage-updated');
+
+            if (!cov.total) {
+                summaryEl.innerHTML = '<div class="no-data">No coverage data available yet</div>';
+                bodyEl.innerHTML = '';
+                return;
+            }
+
+            summaryEl.innerHTML = `
+                <div class="stat">
+                    <div class="stat-value ${getScoreClass(cov.total)}">${cov.total.toFixed(1)}%</div>
+                    <div class="stat-label">Total Coverage</div>
+                </div>
+            `;
+
+            let rows = '';
+            for (const [pkg, pct] of Object.entries(cov.packages || {})) {
+                rows += `<tr><td><code>${pkg}</code></td><td>${pct.toFixed(1)}%</td><td>${getCoverageStatus(pct)}</td></tr>`;
+            }
+            bodyEl.innerHTML = rows || '<tr><td colspan="3">No package data</td></tr>';
+
+            if (cov.lastUpdated) {
+                updatedEl.textContent = `Last updated: ${cov.lastUpdated}`;
+            }
+        }
+
+        function renderMutationSummary() {
+            const mut = data.mutation;
+            const summaryEl = document.getElementById('mutation-summary');
+            const updatedEl = document.getElementById('mutation-updated');
+
+            if (!mut.summary.TotalMutants) {
+                summaryEl.innerHTML = '<div class="no-data">No mutation data available yet</div>';
+                return;
+            }
+
+            const score = mut.summary.MutationScore || 0;
+            summaryEl.innerHTML = `
+                <div class="stat"><div class="stat-value ${getScoreClass(score)}">${score.toFixed(1)}%</div><div class="stat-label">Mutation Score</div></div>
+                <div class="stat"><div class="stat-value">${mut.summary.TotalMutants}</div><div class="stat-label">Total Mutants</div></div>
+                <div class="stat"><div class="stat-value killed">${mut.summary.Killed}</div><div class="stat-label">Killed</div></div>
+                <div class="stat"><div class="stat-value survived">${mut.summary.Survived}</div><div class="stat-label">Survived</div></div>
+                <div class="stat"><div class="stat-value timeout">${mut.summary.Timeout}</div><div class="stat-label">Timeout</div></div>
+            `;
+
+            if (mut.lastUpdated) {
+                updatedEl.textContent = `Last updated: ${mut.lastUpdated}`;
+            }
+        }
+
+        function renderMutationResults() {
+            const results = data.mutation.results || [];
+            const container = document.getElementById('mutation-results');
+
+            if (!results.length) {
+                container.innerHTML = '<div class="no-data">No mutation results available</div>';
+                return;
+            }
+
+            const fileMap = new Map();
+            results.forEach(r => {
+                const file = r.file || r.File || 'unknown';
+                if (!fileMap.has(file)) fileMap.set(file, []);
+                fileMap.get(file).push(r);
+            });
+
+            let html = '';
+            fileMap.forEach((mutants, file) => {
+                const filtered = currentFilter === 'all' ? mutants : mutants.filter(m => (m.status || m.Status || '').toLowerCase() === currentFilter);
+                if (filtered.length === 0) return;
+
+                const killed = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'killed').length;
+                const survived = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'survived').length;
+                const timeout = mutants.filter(m => (m.status || m.Status || '').toLowerCase() === 'timeout').length;
+
+                html += `
+                    <div class="file">
+                        <div class="file-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                            <span class="file-name">${file}</span>
+                            <div class="file-stats">
+                                <span class="killed">${killed} killed</span>
+                                <span class="survived">${survived} survived</span>
+                                ${timeout ? `<span class="timeout">${timeout} timeout</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="mutants">
+                            ${filtered.map(m => renderMutant(m)).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html || '<div class="no-data">No mutants match the current filter</div>';
+        }
+
+        function renderMutant(m) {
+            const status = (m.status || m.Status || 'unknown').toLowerCase();
+            const type = m.mutator || m.Mutator || m.type || m.Type || 'Unknown';
+            const line = m.line || m.Line || '?';
+            const col = m.column || m.Column || '?';
+            const original = m.original || m.Original || '';
+            const mutated = m.mutated || m.Mutated || '';
+
+            return `
+                <div class="mutant ${status}">
+                    <div class="mutant-header">
+                        <span class="mutant-type">${type}</span>
+                        <span class="mutant-status ${status}">${status.toUpperCase()}</span>
+                    </div>
+                    <div class="mutant-location">Line ${line}, Column ${col}</div>
+                    ${original || mutated ? `
+                        <div class="mutant-diff">
+                            ${original ? `<div class="diff-old">- ${escapeHtml(original)}</div>` : ''}
+                            ${mutated ? `<div class="diff-new">+ ${escapeHtml(mutated)}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        fetch('test-results.json')
+            .then(r => r.json())
+            .then(d => {
+                data = d;
+                renderCoverage();
+                renderMutationSummary();
+                renderMutationResults();
+            })
+            .catch(err => {
+                document.getElementById('coverage-summary').innerHTML = '<div class="no-data">Failed to load test results</div>';
+                document.getElementById('mutation-summary').innerHTML = '<div class="no-data">Failed to load test results</div>';
+                console.error('Failed to load test-results.json:', err);
+            });
+    </script>
+</body>
+</html>

@@ -64,6 +64,11 @@ jobs:
       - run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
           echo "## Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-out
+          path: coverage.out
 
   mutation:
     name: Mutation Testing (diff-based)
@@ -171,3 +176,78 @@ jobs:
         with:
           name: mutation-report-html
           path: report.html
+
+  update-results:
+    name: Update Test Results
+    needs: [coverage, mutation]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/test' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-out
+          path: .
+        continue-on-error: true
+
+      - name: Download mutation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mutation-report-json
+          path: .
+        continue-on-error: true
+
+      - name: Update test results
+        run: |
+          chmod +x scripts/update-test-results.sh
+
+          ARGS=""
+          if [ -f coverage.out ]; then
+            ARGS="$ARGS --coverage coverage.out"
+          fi
+          if [ -f mutation-report.json ]; then
+            ARGS="$ARGS --mutation mutation-report.json"
+          fi
+
+          if [ -n "$ARGS" ]; then
+            ./scripts/update-test-results.sh $ARGS
+          else
+            echo "No test results to update"
+            exit 0
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet docs/test-results.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR with updated results
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="chore/test-results-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add docs/test-results.json
+          git commit -m "chore: update test results"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --base test \
+            --head "$BRANCH" \
+            --title "chore: update test results" \
+            --body "Automated test results update from CI."
