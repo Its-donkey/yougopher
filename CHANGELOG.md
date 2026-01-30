@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.3.0] - 2026-01-30
+
+### Added
 - Initial project structure
 - Package skeleton for core, auth, streaming, data, analytics
 - Core: HTTP client with OAuth and API key authentication
