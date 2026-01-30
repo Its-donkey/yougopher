@@ -40,6 +40,11 @@ on:
         description: "Tag name when archiving (e.g., v1-archive)"
         required: false
         type: string
+      docs_only:
+        description: "Documentation-only promotion (skips tests, version bump, and release)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -72,6 +77,7 @@ jobs:
           go-version: '1.23'
 
       - name: Run tests
+        if: ${{ github.event.inputs.docs_only != 'true' }}
         run: go test -v ./...
 
       - name: Calculate next version
@@ -79,8 +85,17 @@ jobs:
         env:
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
           CUSTOM_TAG: ${{ github.event.inputs.tag_name }}
+          DOCS_ONLY: ${{ github.event.inputs.docs_only }}
         run: |
           set -euo pipefail
+
+          # For docs-only promotions, use a timestamp-based identifier
+          if [ "$DOCS_ONLY" = "true" ]; then
+            NEXT_TAG="docs-$(date +%Y%m%d-%H%M%S)"
+            echo "Docs-only promotion: $NEXT_TAG"
+            echo "tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           # Get latest tag
           LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "v0.0.0")
@@ -131,8 +146,19 @@ jobs:
           git checkout -b "$RELEASE_BRANCH"
           echo "branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
 
+      - name: Push release branch (docs-only)
+        if: ${{ github.event.inputs.docs_only == 'true' }}
+        env:
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin "$RELEASE_BRANCH"
+          echo "✅ Pushed release branch for docs-only promotion"
+
       - name: Update CHANGELOG version
         id: changelog
+        if: ${{ github.event.inputs.docs_only != 'true' }}
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
         run: |
@@ -162,7 +188,7 @@ jobs:
 
       - name: Commit CHANGELOG update
         id: changelog_commit
-        if: steps.changelog.outputs.updated == 'true'
+        if: ${{ github.event.inputs.docs_only != 'true' && steps.changelog.outputs.updated == 'true' }}
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
@@ -180,6 +206,7 @@ jobs:
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
+          DOCS_ONLY: ${{ github.event.inputs.docs_only }}
           SOURCE_BRANCH: ${{ steps.branches.outputs.source }}
           RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
           TARGET_BRANCH: ${{ steps.branches.outputs.target }}
@@ -197,13 +224,22 @@ jobs:
             echo "created=false" >> $GITHUB_OUTPUT
           else
             # Create PR from release branch to target
-            PR_TITLE="Release ${TAG_NAME}: Promote $SOURCE_BRANCH to $TARGET_BRANCH"
+            if [ "$DOCS_ONLY" = "true" ]; then
+              PR_TITLE="Docs: Promote $SOURCE_BRANCH to $TARGET_BRANCH"
+              PR_BODY="## Summary
 
-            PR_URL=$(gh pr create \
-              --base "$TARGET_BRANCH" \
-              --head "$RELEASE_BRANCH" \
-              --title "$PR_TITLE" \
-              --body "## Summary
+          Documentation-only promotion of $SOURCE_BRANCH branch to $TARGET_BRANCH.
+
+          **Type:** Documentation only (no version bump or release)
+
+          ## Test plan
+
+          - [ ] Review documentation changes before merging
+
+          🤖 Generated with GitHub Actions"
+            else
+              PR_TITLE="Release ${TAG_NAME}: Promote $SOURCE_BRANCH to $TARGET_BRANCH"
+              PR_BODY="## Summary
 
           Automated promotion of $SOURCE_BRANCH branch to $TARGET_BRANCH.
 
@@ -215,7 +251,14 @@ jobs:
           - [x] All tests pass on $SOURCE_BRANCH branch
           - [ ] Review changes before merging
 
-          🤖 Generated with GitHub Actions")
+          🤖 Generated with GitHub Actions"
+            fi
+
+            PR_URL=$(gh pr create \
+              --base "$TARGET_BRANCH" \
+              --head "$RELEASE_BRANCH" \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY")
 
             # Extract PR number from URL
             PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
@@ -237,7 +280,7 @@ jobs:
           echo "✅ CI workflows should now be running"
 
       - name: Add PR link to CHANGELOG
-        if: steps.pr.outputs.created == 'true'
+        if: ${{ github.event.inputs.docs_only != 'true' && steps.pr.outputs.created == 'true' }}
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -278,15 +321,18 @@ jobs:
         if: ${{ github.event.inputs.auto_merge == 'true' }}
         env:
           TAG_NAME: ${{ steps.version.outputs.tag }}
+          DOCS_ONLY: ${{ github.event.inputs.docs_only }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "🔄 Enabling auto-merge for PR #${PR_NUMBER}..."
           gh pr merge "$PR_NUMBER" --auto --merge --delete-branch
           echo "✅ Auto-merge enabled - PR will merge when CI passes"
-          echo ""
-          echo "⚠️  Note: Tag ${TAG_NAME} must be created manually after merge:"
-          echo "   git fetch origin main && git tag ${TAG_NAME} origin/main && git push origin ${TAG_NAME}"
+          if [ "$DOCS_ONLY" != "true" ]; then
+            echo ""
+            echo "⚠️  Note: Tag ${TAG_NAME} must be created manually after merge:"
+            echo "   git fetch origin main && git tag ${TAG_NAME} origin/main && git push origin ${TAG_NAME}"
+          fi
 
   archive:
     if: ${{ github.event.inputs.action == 'archive' }}
