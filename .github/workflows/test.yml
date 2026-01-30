@@ -65,6 +65,63 @@ jobs:
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
           echo "## Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
 
+  mutation:
+    name: Mutation Testing (diff-based)
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - name: Install mutagoph
+        run: go install github.com/its-donkey/mutagoph/cmd/mutagoph@latest
+      - name: Determine diff base
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=origin/${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "base=HEAD~1" >> $GITHUB_OUTPUT
+          fi
+      - name: Run mutation testing
+        run: |
+          mutagoph run \
+            -target ./... \
+            -parallelism dynamic \
+            --dynamic-level standard \
+            --diff-base "${{ steps.diff.outputs.base }}" \
+            --output json \
+            --output-file mutation-report.json
+      - name: Generate summary
+        if: always()
+        run: |
+          if [ -f mutation-report.json ]; then
+            echo "## Mutation Testing Results" >> $GITHUB_STEP_SUMMARY
+            SCORE=$(jq -r '.summary.MutationScore // 0' mutation-report.json)
+            TOTAL=$(jq -r '.summary.TotalMutants // 0' mutation-report.json)
+            KILLED=$(jq -r '.summary.Killed // 0' mutation-report.json)
+            SURVIVED=$(jq -r '.summary.Survived // 0' mutation-report.json)
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Score | ${SCORE}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Total | ${TOTAL} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Killed | ${KILLED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Survived | ${SURVIVED} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Mutation Testing" >> $GITHUB_STEP_SUMMARY
+            echo "No mutations found in changed files." >> $GITHUB_STEP_SUMMARY
+          fi
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-json
+          path: mutation-report.json
+          if-no-files-found: ignore
+
   full-mutation:
     name: Full Mutation Testing
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_mutation == 'true' }}
