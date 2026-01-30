@@ -1,7 +1,6 @@
 # Hidden directories (except .git*)
 .*
 !.git*
-scripts/
 
 # Binaries
 *.exe
@@ -17,6 +16,10 @@ scripts/
 *.out
 coverage.out
 coverage.html
+
+# Mutation testing reports
+mutation-report.*
+report.html
 
 # Go workspace
 go.work

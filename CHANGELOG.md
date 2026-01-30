@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-## [0.2.2] - 2026-01-29 ([#42](https://github.com/Its-donkey/yougopher/pull/42))
+## [0.2.3] - 2026-01-30 ([#52](https://github.com/Its-donkey/yougopher/pull/52))
 
 ### Added
 - Initial project structure
