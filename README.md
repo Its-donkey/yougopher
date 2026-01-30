@@ -86,6 +86,7 @@ func main() {
 - [Streaming](docs/streaming.md) - Chat bot, polling, broadcasts
 - [Data API](docs/data.md) - Videos, channels, playlists, search
 - [Analytics API](docs/analytics.md) - Channel statistics, demographics, revenue
+- [Test Results](docs/test-results.md) - Coverage and mutation testing
 
 ## Example Projects
 
