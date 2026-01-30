@@ -18,6 +18,7 @@ permissions:
 jobs:
   test:
     name: Test
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,6 +33,7 @@ jobs:
 
   lint:
     name: Lint
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -44,6 +46,7 @@ jobs:
 
   build:
     name: Build
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -54,6 +57,7 @@ jobs:
 
   coverage:
     name: Coverage
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -67,6 +71,7 @@ jobs:
 
   mutation:
     name: Mutation Testing
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.full_mutation != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
