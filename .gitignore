@@ -1,9 +1,6 @@
 # Hidden directories (except .git*)
 .*
 !.git*
-# Scripts (but track CI scripts)
-scripts/
-!scripts/update-test-results.sh
 
 # Binaries
 *.exe
