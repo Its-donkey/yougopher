@@ -146,6 +146,16 @@ jobs:
           git checkout -b "$RELEASE_BRANCH"
           echo "branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
 
+      - name: Push release branch (docs-only)
+        if: ${{ github.event.inputs.docs_only == 'true' }}
+        env:
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin "$RELEASE_BRANCH"
+          echo "✅ Pushed release branch for docs-only promotion"
+
       - name: Update CHANGELOG version
         id: changelog
         if: ${{ github.event.inputs.docs_only != 'true' }}
