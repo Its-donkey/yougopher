@@ -1,5 +1,9 @@
 # Yougopher
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/Its-donkey/yougopher.svg)](https://pkg.go.dev/github.com/Its-donkey/yougopher)
+[![codecov](https://codecov.io/gh/Its-donkey/yougopher/graph/badge.svg)](https://codecov.io/gh/Its-donkey/yougopher)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Its-donkey/yougopher)](https://goreportcard.com/report/github.com/Its-donkey/yougopher)
+
 A YouTube API toolkit in Go focused on live chat bot functionality.
 
 ## Installation
